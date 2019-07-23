@@ -32,7 +32,6 @@
 #include <QLabel>
 #include <QAction>
 #include <KToolBarLabelAction>
-#include <QToolButton>
 #include <QDebug>
 #include <QApplication>
 #include <QPaintEvent>
@@ -41,6 +40,8 @@
 #include <QSplitter>
 #include <QStyleOptionTabBarBase>
 #include <QStylePainter>
+#include <QDrag>
+#include <QMimeData>
 
 namespace Konsole {
 
@@ -49,8 +50,8 @@ TerminalHeaderBar::TerminalHeaderBar(QWidget *parent)
 {
     m_closeBtn = new QToolButton(this);
     m_closeBtn->setIcon(QIcon::fromTheme(QStringLiteral("tab-close")));
-    m_closeBtn->setToolTip(i18nc("@action:itooltip", "Close terminal"));
-    m_closeBtn->setText(i18nc("@action:itooltip", "Close terminal"));
+    m_closeBtn->setToolTip(i18nc("@info:tooltip", "Close terminal"));
+    m_closeBtn->setText(i18nc("@info:tooltip", "Close terminal"));
     m_closeBtn->setObjectName(QStringLiteral("close-terminal-button"));
     m_closeBtn->setAutoRaise(true);
 
@@ -58,9 +59,11 @@ TerminalHeaderBar::TerminalHeaderBar(QWidget *parent)
     m_toggleExpandedMode->setIcon(QIcon::fromTheme(QStringLiteral("view-fullscreen"))); // fake 'expand' icon. VDG input?
     m_toggleExpandedMode->setAutoRaise(true);
     m_toggleExpandedMode->setCheckable(true);
-    m_toggleExpandedMode->setToolTip(i18nc("@action:itooltip", "Maximize / Restore Terminal"));
+    m_toggleExpandedMode->setToolTip(i18nc("@info:tooltip", "Maximize terminal"));
 
     m_terminalTitle = new QLabel(this);
+    m_terminalTitle->setFont(QApplication::font());
+
     m_terminalIcon = new QLabel(this);
     m_terminalActivity = new QLabel(this);
 
@@ -80,20 +83,17 @@ TerminalHeaderBar::TerminalHeaderBar(QWidget *parent)
 
     setAutoFillBackground(true);
     terminalFocusOut();
+    connect(m_toggleExpandedMode, &QToolButton::clicked,
+        this, &TerminalHeaderBar::requestToggleExpansion);
+
 }
 
 // Hack untill I can detangle the creation of the TerminalViews
 void TerminalHeaderBar::finishHeaderSetup(ViewProperties *properties)
 {
-    //TODO: Fix ViewProperties signals.
-    connect(properties, &Konsole::ViewProperties::titleChanged, this,
-    [this, properties]{
+    auto controller = dynamic_cast<SessionController*>(properties);
+    connect(properties, &Konsole::ViewProperties::titleChanged, this, [this, properties]{
         m_terminalTitle->setText(properties->title());
-    });
-
-    connect(m_closeBtn, &QToolButton::clicked, this, [properties]{
-        auto controller = qobject_cast<SessionController*>(properties);
-        controller->closeSession();
     });
 
     connect(properties, &Konsole::ViewProperties::iconChanged, this, [this, properties] {
@@ -104,8 +104,7 @@ void TerminalHeaderBar::finishHeaderSetup(ViewProperties *properties)
         m_terminalActivity->setPixmap(QPixmap());
     });
 
-    connect(m_toggleExpandedMode, &QToolButton::clicked,
-            this, &TerminalHeaderBar::requestToggleExpansion);
+    connect(m_closeBtn, &QToolButton::clicked, controller, &SessionController::closeSession);
 }
 
 void TerminalHeaderBar::paintEvent(QPaintEvent *paintEvent)
@@ -118,10 +117,10 @@ void TerminalHeaderBar::paintEvent(QPaintEvent *paintEvent)
     const auto globalPos = parentWidget()->mapToGlobal(pos());
     auto *widget = qApp->widgetAt(globalPos.x() + 10, globalPos.y() - 10);
 
-    const bool isTabbar = qobject_cast<QTabBar*>(widget);
-    const bool isTerminalWidget = qobject_cast<TerminalDisplay*>(widget);
-    const bool isSplitter = qobject_cast<QSplitter*>(widget) || qobject_cast<QSplitterHandle*>(widget);
-    if (widget && !isTabbar && !isTerminalWidget && !isSplitter) {
+    const bool isTabbar = qobject_cast<QTabBar*>(widget) != nullptr;
+    const bool isTerminalWidget = qobject_cast<TerminalDisplay*>(widget) != nullptr;
+    const bool isSplitter = (qobject_cast<QSplitter*>(widget) != nullptr) || (qobject_cast<QSplitterHandle*>(widget) != nullptr);
+    if ((widget != nullptr) && !isTabbar && !isTerminalWidget && !isSplitter) {
         QStyleOptionTabBarBase optTabBase;
         QStylePainter p(this);
         optTabBase.init(this);
@@ -145,12 +144,24 @@ void TerminalHeaderBar::paintEvent(QPaintEvent *paintEvent)
 
 void TerminalHeaderBar::mouseMoveEvent(QMouseEvent* ev)
 {
-    Q_UNUSED(ev);
+    if (m_toggleExpandedMode->isChecked()) {
+        return;
+    }
+    auto point = ev->pos() - m_startDrag;
+    if (point.manhattanLength() > 10) {
+        auto drag = new QDrag(parent());
+        auto mimeData = new QMimeData();
+        QByteArray payload;
+        payload.setNum(qApp->applicationPid());
+        mimeData->setData(QStringLiteral("konsole/terminal_display"), payload);
+        drag->setMimeData(mimeData);
+        drag->start();
+    }
 }
 
 void TerminalHeaderBar::mousePressEvent(QMouseEvent* ev)
 {
-    Q_UNUSED(ev);
+    m_startDrag = ev->pos();
 }
 
 void TerminalHeaderBar::mouseReleaseEvent(QMouseEvent* ev)

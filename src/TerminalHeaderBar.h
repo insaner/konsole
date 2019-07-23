@@ -23,6 +23,7 @@
 #define TERMINAL_HEADER_BAR_H
 
 #include <QWidget>
+#include <QPoint>
 
 class QLabel;
 class QToolButton;
@@ -35,7 +36,7 @@ class TerminalHeaderBar : public QWidget {
     Q_OBJECT
 public:
     // TODO: Verify if the terminalDisplay is needed, or some other thing like SessionController.
-    TerminalHeaderBar(QWidget *parent = nullptr);
+    explicit TerminalHeaderBar(QWidget *parent = nullptr);
     void finishHeaderSetup(ViewProperties *properties);
 
     void terminalFocusIn();
@@ -59,6 +60,7 @@ private:
     QToolButton *m_closeBtn;
     QToolButton *m_toggleExpandedMode;
     bool m_terminalIsFocused;
+    QPoint m_startDrag;
 };
 
 } // namespace Konsole

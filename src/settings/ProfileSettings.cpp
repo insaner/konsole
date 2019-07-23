@@ -265,7 +265,7 @@ void ProfileSettings::updateDefaultItem()
 {
     Profile::Ptr defaultProfile = ProfileManager::instance()->defaultProfile();
 
-    const QString defaultItemSuffix = i18nc("Default list item's name suffix (with separator)", " (default)");
+    const QString defaultItemSuffix = i18nc("@item:intable Default list item's name suffix (with separator)", " (default)");
 
     const int rowCount = _sessionModel->rowCount();
     for (int i = 0; i < rowCount; i++) {
@@ -512,7 +512,7 @@ QSize Konsole::ShortcutItemDelegate::sizeHint(const QStyleOptionViewItem &option
     const int width = fm.width(shortcutString + QStringLiteral(", ..."))
                       + editorMargins;
 
-    return QSize(width, QStyledItemDelegate::sizeHint(option, index).height());
+    return {width, QStyledItemDelegate::sizeHint(option, index).height()};
 }
 
 void Konsole::ShortcutItemDelegate::destroyEditor(QWidget *editor, const QModelIndex &index) const

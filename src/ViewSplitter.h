@@ -30,6 +30,10 @@
 #include "konsoleprivate_export.h"
 
 class QFocusEvent;
+class QDragMoveEvent;
+class QDragEnterEvent;
+class QDropEvent;
+class QDragLeaveEvent;
 
 namespace Konsole {
 class TerminalDisplay;
@@ -52,13 +56,13 @@ class KONSOLEPRIVATE_EXPORT ViewSplitter : public QSplitter
 
 public:
     explicit ViewSplitter(QWidget *parent = nullptr);
-
+    enum class AddBehavior {AddBefore, AddAfter};
     /**
      * Locates the child ViewSplitter widget which currently has the focus
      * and inserts the container into it.
      *
      * @param terminalDisplay The container to insert
-     * @param orientation Specifies whether the view should be split
+     * @param containerOrientation Specifies whether the view should be split
      *                    horizontally or vertically.  If the orientation
      *                    is the same as the ViewSplitter into which the
      *                    container is to be inserted, or if the splitter
@@ -67,11 +71,10 @@ public:
      *                    is different, then a new child splitter
      *                    will be created, into which the container will
      *                    be inserted.
+     * @param behavior Specifies whether to add new terminal after current
+     *                 tab or at end.
      */
-    void addTerminalDisplay(TerminalDisplay *terminalDisplay, Qt::Orientation orientation);
-
-    /** Removes a container from the splitter.  The container is not deleted. */
-    void removeTerminalDisplay(TerminalDisplay *terminalDisplay);
+    void addTerminalDisplay(TerminalDisplay* terminalDisplay, Qt::Orientation containerOrientation, AddBehavior behavior = AddBehavior::AddAfter);
 
     /** Returns the child ViewSplitter widget which currently has the focus */
     ViewSplitter *activeSplitter();
@@ -99,11 +102,6 @@ public:
     ViewSplitter *getToplevelSplitter();
 
     /**
-     * Gives the focus to the active view in the specified container
-     */
-    void setActiveTerminalDisplay(TerminalDisplay *container);
-
-    /**
      * Changes the size of the specified @p container by a given @p percentage.
      * @p percentage may be positive ( in which case the size of the container
      * is increased ) or negative ( in which case the size of the container
@@ -122,13 +120,23 @@ public:
     void handleFocusDirection(Qt::Orientation orientation, int direction);
 
     void childEvent(QChildEvent* event) override;
+    bool terminalMaximized() const { return m_terminalMaximized; }
+
+protected:
+    void dragEnterEvent(QDragEnterEvent *ev) override;
+    void dragMoveEvent(QDragMoveEvent *ev) override;
+    void dragLeaveEvent(QDragLeaveEvent * event) override;
+    void dropEvent(QDropEvent *ev) override;
+
+Q_SIGNALS:
+    void terminalDisplayDropped(TerminalDisplay *terminalDisplay);
 
 private:
     /** recursively walks the object tree looking for Splitters and
      * TerminalDisplays, hidding the ones that should be hidden.
      * If a terminal display is not hidden in a subtree, we cannot
      * hide the whole tree.
-     * 
+     *
      * @p currentTerminalDisplay the only terminal display that will still be visible.
      */
     bool hideRecurse(TerminalDisplay *currentTerminalDisplay);

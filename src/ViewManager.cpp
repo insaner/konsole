@@ -237,14 +237,12 @@ void ViewManager::setupActions()
     collection->addAction(QStringLiteral("move-tab-to-right"), action);
     collection->setDefaultShortcut(action, Qt::CTRL + Qt::ALT + Qt::Key_Right);
     connect(action, &QAction::triggered, _viewContainer, &TabbedViewContainer::moveTabRight);
-    _multiTabOnlyActions << action;
     _viewContainer->addAction(action);
 
     action = new QAction(i18nc("@action Shortcut entry", "Move tab to the left"), this);
     collection->addAction(QStringLiteral("move-tab-to-left"), action);
     collection->setDefaultShortcut(action, Qt::CTRL + Qt::ALT + Qt::Key_Left);
     connect(action, &QAction::triggered, _viewContainer, &TabbedViewContainer::moveTabLeft);
-    _multiTabOnlyActions << action;
     _viewContainer->addAction(action);
 
     // _viewSplitter->addAction(lastUsedViewReverseAction);
@@ -254,7 +252,6 @@ void ViewManager::setupActions()
         connect(action, &QAction::triggered, this, [this, i]() { switchToView(i); });
         collection->addAction(QStringLiteral("switch-to-tab-%1").arg(i), action);
     }
-
 
     connect(_viewContainer, &TabbedViewContainer::viewAdded, this, &ViewManager::toggleActionsBasedOnState);
     connect(_viewContainer, &TabbedViewContainer::viewRemoved, this, &ViewManager::toggleActionsBasedOnState);
@@ -269,7 +266,7 @@ void ViewManager::toggleActionsBasedOnState() {
         tabOnlyAction->setEnabled(count > 1);
     }
 
-    if (_viewContainer && _viewContainer->activeViewSplitter()) {
+    if ((_viewContainer != nullptr) && (_viewContainer->activeViewSplitter() != nullptr)) {
         const int splitCount = _viewContainer
                 ->activeViewSplitter()
                 ->getToplevelSplitter()
@@ -435,6 +432,8 @@ QHash<TerminalDisplay*, Session*> ViewManager::forgetAll(ViewSplitter* splitter)
 
 Session* ViewManager::forgetTerminal(TerminalDisplay* terminal)
 {
+    disconnect(terminal, &TerminalDisplay::requestToggleExpansion, nullptr, nullptr);
+
     removeController(terminal->sessionController());
     auto session = _sessionMap.take(terminal);
     if (session != nullptr) {
@@ -465,7 +464,7 @@ void ViewManager::sessionFinished()
 
     // Before deleting the view, let's unmaximize if it's maximized.
     auto *splitter = qobject_cast<ViewSplitter*>(view->parentWidget());
-    if (!splitter) {
+    if (splitter == nullptr) {
         return;
     }
 
@@ -484,7 +483,7 @@ void ViewManager::sessionFinished()
         emit unplugController(_pluggedController);
     }
 
-    if (_sessionMap.size() > 0) {
+    if (!_sessionMap.empty()) {
         updateTerminalDisplayHistory(view, true);
         focusAnotherTerminal(toplevelSplitter);
         toggleActionsBasedOnState();
@@ -593,10 +592,8 @@ SessionController *ViewManager::createController(Session *session, TerminalDispl
 // should this be handed by ViewManager::unplugController signal
 void ViewManager::removeController(SessionController* controller)
 {
-    disconnect(controller, &Konsole::SessionController::focused, this,
-            &Konsole::ViewManager::controllerChanged);
     if (_pluggedController == controller) {
-        _pluggedController = nullptr;
+        _pluggedController.clear();
     }
     controller->deleteLater();
 }
@@ -622,6 +619,14 @@ void ViewManager::attachView(TerminalDisplay *terminal, Session *session)
 {
     connect(session, &Konsole::Session::finished, this, &Konsole::ViewManager::sessionFinished,
             Qt::UniqueConnection);
+
+    // Disconnect from the other viewcontainer.
+    disconnect(terminal, &TerminalDisplay::requestToggleExpansion, nullptr, nullptr);
+
+    // reconnect on this container.
+    connect(terminal, &TerminalDisplay::requestToggleExpansion,
+            _viewContainer, &TabbedViewContainer::toggleMaximizeCurrentTerminal, Qt::UniqueConnection);
+
     _sessionMap[terminal] = session;
     createController(session, terminal);
     toggleActionsBasedOnState();
@@ -735,6 +740,7 @@ ViewManager::NavigationMethod ViewManager::navigationMethod() const
 
 void ViewManager::containerViewsChanged(TabbedViewContainer *container)
 {
+    Q_UNUSED(container);
     // TODO: Verify that this is right.
     emit viewPropertiesChanged(viewProperties());
 }
@@ -870,7 +876,7 @@ QJsonObject saveSessionsRecurse(QSplitter *splitter) {
 
         if (maybeSplitter != nullptr) {
             internalWidgets.append(saveSessionsRecurse(maybeSplitter));
-        } else if (maybeTerminalDisplay) {
+        } else if (maybeTerminalDisplay != nullptr) {
             internalWidgets.append(saveSessionTerminal(maybeTerminalDisplay));
         }
     }
@@ -884,7 +890,7 @@ void ViewManager::saveSessions(KConfigGroup &group)
 {
     QJsonArray rootArray;
     for(int i = 0; i < _viewContainer->count(); i++) {
-        QSplitter *splitter = qobject_cast<QSplitter*>(_viewContainer->widget(i));
+        auto *splitter = qobject_cast<QSplitter*>(_viewContainer->widget(i));
         rootArray.append(saveSessionsRecurse(splitter));
     }
 

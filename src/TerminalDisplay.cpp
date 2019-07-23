@@ -485,6 +485,7 @@ TerminalDisplay::TerminalDisplay(QWidget* parent)
     , _searchBar(new IncrementalSearchBar(this))
     , _headerBar(new TerminalHeaderBar(this))
     , _searchResultRect(QRect())
+    , _drawOverlay(false)
 {
     // terminal applications are not designed with Right-To-Left in mind,
     // so the layout is forced to Left-To-Right
@@ -541,7 +542,6 @@ TerminalDisplay::TerminalDisplay(QWidget* parent)
     _verticalLayout->setSpacing(0);
     _verticalLayout->setMargin(0);
     setLayout(_verticalLayout);
-
     new AutoScrollHandler(this);
 #ifndef QT_NO_ACCESSIBILITY
     QAccessible::installFactory(Konsole::accessibleInterfaceFactory);
@@ -560,6 +560,35 @@ TerminalDisplay::~TerminalDisplay()
 
     _readOnlyMessageWidget = nullptr;
     _outputSuspendedMessageWidget = nullptr;
+}
+
+void TerminalDisplay::hideDragTarget()
+{
+    _drawOverlay = false;
+    update();
+}
+
+void TerminalDisplay::showDragTarget()
+{
+    auto cursorPos = mapFromGlobal(QCursor::pos());
+    using EdgeDistance = std::pair<int, Qt::Edge>;
+    auto closerToEdge = std::min<EdgeDistance>(
+        {
+            {cursorPos.x(), Qt::LeftEdge},
+            {cursorPos.y(), Qt::TopEdge},
+            {width() - cursorPos.x(), Qt::RightEdge},
+            {height() - cursorPos.y(), Qt::BottomEdge}
+        },
+        [](const EdgeDistance& left, const EdgeDistance& right) -> bool {
+            return left.first < right.first;
+        }
+    );
+    if (_overlayEdge == closerToEdge.second) {
+        return;
+    }
+    _overlayEdge = closerToEdge.second;
+    _drawOverlay = true;
+    update();
 }
 
 /* ------------------------------------------------------------------------- */
@@ -928,6 +957,13 @@ void TerminalDisplay::scrollImage(int lines , const QRect& screenWindowRegion)
     Q_ASSERT(linesToMove > 0);
     Q_ASSERT(bytesToMove > 0);
 
+    scrollRect.setTop( lines > 0 ? top : top + abs(lines) * _fontHeight);
+    scrollRect.setHeight(linesToMove * _fontHeight);
+
+    if (!scrollRect.isValid() || scrollRect.isEmpty()) {
+        return;
+    }
+
     //scroll internal image
     if (lines > 0) {
         // check that the memory areas that we are going to move are valid
@@ -938,9 +974,6 @@ void TerminalDisplay::scrollImage(int lines , const QRect& screenWindowRegion)
 
         //scroll internal image down
         memmove(firstCharPos , lastCharPos , bytesToMove);
-
-        //set region of display to scroll
-        scrollRect.setTop(top);
     } else {
         // check that the memory areas that we are going to move are valid
         Q_ASSERT((char*)firstCharPos + bytesToMove <
@@ -948,13 +981,7 @@ void TerminalDisplay::scrollImage(int lines , const QRect& screenWindowRegion)
 
         //scroll internal image up
         memmove(lastCharPos , firstCharPos , bytesToMove);
-
-        //set region of the display to scroll
-        scrollRect.setTop(top + abs(lines) * _fontHeight);
     }
-    scrollRect.setHeight(linesToMove * _fontHeight);
-
-    Q_ASSERT(scrollRect.isValid() && !scrollRect.isEmpty());
 
     //scroll the display vertically to match internal _image
     scroll(0 , _fontHeight * (-lines) , scrollRect);
@@ -1250,14 +1277,14 @@ void TerminalDisplay::paintEvent(QPaintEvent* pe)
 
     // Determine which characters should be repainted (1 region unit = 1 character)
     QRegion dirtyImageRegion;
-    foreach(const QRect & rect, (pe->region() & contentsRect()).rects()) {
+    foreach(const QRect & rect, (pe->region() & contentsRect())) {
         dirtyImageRegion += widgetToImage(rect);
         drawBackground(paint, rect, getBackgroundColor(), true /* use opacity setting */);
     }
 
     paint.setRenderHint(QPainter::Antialiasing, _antialiasText);
 
-    foreach(const QRect & rect, dirtyImageRegion.rects()) {
+    foreach(const QRect & rect, dirtyImageRegion) {
         drawContents(paint, rect);
     }
     drawCurrentResultRect(paint);
@@ -1266,10 +1293,23 @@ void TerminalDisplay::paintEvent(QPaintEvent* pe)
 
     const bool drawDimmed = _dimWhenInactive && !hasFocus();
     const QColor dimColor(0, 0, 0, 128);
-    foreach(const QRect & rect, (pe->region() & contentsRect()).rects()) {
+    foreach(const QRect & rect, (pe->region() & contentsRect())) {
         if (drawDimmed) {
             paint.fillRect(rect, dimColor);
         }
+    }
+
+    if (_drawOverlay) {
+        const auto y = _headerBar->isVisible() ? _headerBar->height() : 0;
+        const auto rect = _overlayEdge == Qt::LeftEdge ? QRect(0, y, width() / 2, height())
+                  : _overlayEdge == Qt::TopEdge ? QRect(0, y, width(), height() / 2)
+                  : _overlayEdge == Qt::RightEdge ? QRect(width() - width() / 2, y, width() / 2, height())
+                  : QRect(0, height() - height() / 2, width(), height() / 2);
+
+        paint.setRenderHint(QPainter::Antialiasing);
+        paint.setPen(Qt::NoPen);
+        paint.setBrush(QColor(100,100,100, 127));
+        paint.drawRect(rect);
     }
 }
 
@@ -1377,8 +1417,7 @@ void TerminalDisplay::paintFilters(QPainter& painter)
 
             if (_showUrlHint && urlNumber < 10) {
                 // Position at the beginning of the URL
-                const QVector<QRect> regionRects = region.rects();
-                QRect hintRect(regionRects.first());
+                QRect hintRect(*region.begin());
                 hintRect.setWidth(r.height());
                 painter.fillRect(hintRect, QColor(0, 0, 0, 128));
                 painter.setPen(Qt::white);
@@ -1828,6 +1867,7 @@ void TerminalDisplay::resizeEvent(QResizeEvent *event)
     _searchBar->correctPosition(QSize(width, headerHeight));
     if (contentsRect().isValid()) {
         updateImageSize();
+        updateImage();
     }
 }
 
@@ -3559,7 +3599,7 @@ bool TerminalDisplay::event(QEvent* event)
         break;
     case QEvent::FocusOut:
     case QEvent::FocusIn:
-        if(_screenWindow) {
+        if(_screenWindow != nullptr) {
             // force a redraw on focusIn, fixes the
             // black screen bug when the view is focused
             // but doesn't redraws.
