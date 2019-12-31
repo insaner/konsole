@@ -26,7 +26,6 @@
 #include "konsoledebug.h"
 
 // Qt
-#include <QIODevice>
 #include <QFileInfo>
 #include <QFile>
 #include <QDir>
@@ -56,14 +55,11 @@ ColorSchemeManager* ColorSchemeManager::instance()
 
 void ColorSchemeManager::loadAllColorSchemes()
 {
-    int success = 0;
     int failed = 0;
 
-    QStringList nativeColorSchemes = listColorSchemes();
-    foreach (const QString &colorScheme, nativeColorSchemes) {
-        if (loadColorScheme(colorScheme)) {
-            success++;
-        } else {
+    const QStringList nativeColorSchemes = listColorSchemes();
+    for (const QString &colorScheme : nativeColorSchemes) {
+        if (!loadColorScheme(colorScheme)) {
             failed++;
         }
     }

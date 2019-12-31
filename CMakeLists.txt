@@ -1,10 +1,10 @@
 # Konsole project
 
 # KDE Application Version, managed by release script
-set (KDE_APPLICATIONS_VERSION_MAJOR "19")
-set (KDE_APPLICATIONS_VERSION_MINOR "11")
-set (KDE_APPLICATIONS_VERSION_MICRO "70")
-set (KDE_APPLICATIONS_VERSION "${KDE_APPLICATIONS_VERSION_MAJOR}.${KDE_APPLICATIONS_VERSION_MINOR}.${KDE_APPLICATIONS_VERSION_MICRO}")
+set (RELEASE_SERVICE_VERSION_MAJOR "20")
+set (RELEASE_SERVICE_VERSION_MINOR "03")
+set (RELEASE_SERVICE_VERSION_MICRO "70")
+set (RELEASE_SERVICE_VERSION "${RELEASE_SERVICE_VERSION_MAJOR}.${RELEASE_SERVICE_VERSION_MINOR}.${RELEASE_SERVICE_VERSION_MICRO}")
 
 # minimal requirements
 cmake_minimum_required (VERSION 3.0 FATAL_ERROR)
@@ -15,10 +15,22 @@ set (QT_MIN_VERSION "5.9.0")
 set (KF5_MIN_VERSION "5.6.0")
 
 # Release script will create bugzilla versions
-project(konsole VERSION ${KDE_APPLICATIONS_VERSION})
+project(konsole VERSION ${RELEASE_SERVICE_VERSION})
+
+find_program(CCACHE_FOUND "ccache")
+set(CCACHE_SUPPORT ON CACHE BOOL "Enable ccache support")
+if (CCACHE_FOUND AND CCACHE_SUPPORT)
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" # GNU is GNU GCC
+      OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    # without this compiler messages in `make` backend would be uncolored
+    set(CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} -fdiagnostics-color=auto")
+  endif()
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "ccache")
+  set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "ccache")
+endif()
 
 find_package(ECM ${KF5_MIN_VERSION} REQUIRED NO_MODULE)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH} ${ECM_KDE_MODULE_DIR})
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH})
 
 include(KDEInstallDirs)
 include(KDECMakeSettings)
@@ -33,8 +45,8 @@ include(GenerateExportHeader)
 include(FeatureSummary)
 include(ECMQtDeclareLoggingCategory)
 
-ecm_setup_version(${KDE_APPLICATIONS_VERSION} VARIABLE_PREFIX KONSOLEPRIVATE
-    SOVERSION ${KDE_APPLICATIONS_VERSION_MAJOR}
+ecm_setup_version(${RELEASE_SERVICE_VERSION} VARIABLE_PREFIX KONSOLEPRIVATE
+    SOVERSION ${RELEASE_SERVICE_VERSION_MAJOR}
 )
 find_package(Qt5 ${QT_MIN_VERSION} CONFIG REQUIRED
     Core
@@ -63,11 +75,9 @@ if(NOT APPLE)
 endif()
 set(HAVE_X11 ${X11_FOUND})
 
-# FIXME: Fix code to allow this
-#add_definitions(-DQT_NO_FOREACH)
-
 # See above includes for defaults
 add_definitions(
+  -DQT_NO_FOREACH
   -DQT_STRICT_ITERATORS
   -DQT_NO_URL_CAST_FROM_STRING
 )

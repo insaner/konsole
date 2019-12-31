@@ -121,7 +121,7 @@ class KONSOLEPRIVATE_EXPORT Emulation : public QObject
 public:
     /** Constructs a new terminal emulation */
     Emulation();
-    ~Emulation() Q_DECL_OVERRIDE;
+    ~Emulation() override;
 
     /**
      * Creates a new window onto the output from this emulation.  The contents
@@ -323,7 +323,7 @@ Q_SIGNALS:
      * applications, ones that take up the whole terminal display), running in
      * the terminal indicates whether or not it is interested in Mouse Tracking
      * events. This is an XTerm extension, for more information have a look at:
-     * http://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Mouse-Tracking
+     * https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Mouse-Tracking
      *
      * @param usesMouseTracking This will be true if the program is interested
      * in Mouse Tracking events or false otherwise.

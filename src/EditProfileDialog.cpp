@@ -21,25 +21,18 @@
 // Own
 #include "EditProfileDialog.h"
 
-// Standard
-#include <cmath>
-
 // Qt
-#include <QBrush>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QIcon>
-#include <QLinearGradient>
 #include <QPainter>
 #include <QPushButton>
-#include <QRadialGradient>
 #include <QStandardItem>
 #include <QTextCodec>
 #include <QTimer>
 #include <QUrl>
-#include <QVBoxLayout>
 #include <QStandardPaths>
 
 // KDE
@@ -65,7 +58,6 @@
 #include "ProfileManager.h"
 #include "ShellCommand.h"
 #include "WindowSystemInfo.h"
-#include "Shortcut_p.h"
 #include "FontDialog.h"
 
 using namespace Konsole;
@@ -315,7 +307,7 @@ bool EditProfileDialog::isValidProfileName()
     const QList<Profile::Ptr> existingProfiles = ProfileManager::instance()->allProfiles();
     QStringList otherExistingProfileNames;
 
-    foreach(auto existingProfile, existingProfiles) {
+    for (const Profile::Ptr &existingProfile : existingProfiles) {
         if (existingProfile->name() != _profile->name()) {
             otherExistingProfileNames.append(existingProfile->name());
         }
@@ -874,9 +866,9 @@ void EditProfileDialog::updateColorSchemeList(const QString &selectedColorScheme
 
     QStandardItem *selectedItem = nullptr;
 
-    QList<const ColorScheme *> schemeList = ColorSchemeManager::instance()->allColorSchemes();
+   const QList<const ColorScheme *> schemeList = ColorSchemeManager::instance()->allColorSchemes();
 
-    foreach (const ColorScheme *scheme, schemeList) {
+    for (const ColorScheme *scheme : schemeList) {
         QStandardItem *item = new QStandardItem(scheme->description());
         item->setData(QVariant::fromValue(scheme), Qt::UserRole + 1);
         item->setData(QVariant::fromValue(_profile->font()), Qt::UserRole + 2);
@@ -962,7 +954,7 @@ bool EditProfileDialog::eventFilter(QObject *watched, QEvent *event)
 QSize EditProfileDialog::sizeHint() const
 {
     QFontMetrics fm(font());
-    const int ch = fm.width(QLatin1Char('0'));
+    const int ch = fm.boundingRect(QLatin1Char('0')).width();
 
     // By default minimum size is used. Increase it to make text inputs
     // on "tabs" page wider and to add some whitespace on right side
@@ -1333,7 +1325,8 @@ void EditProfileDialog::enableIfNonEmptySelection(QWidget *widget, QItemSelectio
 void EditProfileDialog::updateTransparencyWarning()
 {
     // zero or one indexes can be selected
-    foreach (const QModelIndex &index, _appearanceUi->colorSchemeList->selectionModel()->selectedIndexes()) {
+    const QModelIndexList selected = _appearanceUi->colorSchemeList->selectionModel()->selectedIndexes();
+    for (const QModelIndex &index : selected) {
         bool needTransparency = index.data(Qt::UserRole + 1).value<const ColorScheme *>()->opacity() < 1.0;
 
         if (!needTransparency) {
@@ -1736,10 +1729,10 @@ int EditProfileDialog::maxSpinBoxWidth(const KPluralHandlingSpinBox *spinBox, co
     const QString singular  = suffix.subs(1).toString();
     const QString min       = QString::number(spinBox->minimum());
     const QString max       = QString::number(spinBox->maximum());
-    const int pluralWidth   = fm.width(plural);
-    const int singularWidth = fm.width(singular);
-    const int minWidth      = fm.width(min);
-    const int maxWidth      = fm.width(max);
+    const int pluralWidth   = fm.boundingRect(plural).width();
+    const int singularWidth = fm.boundingRect(singular).width();
+    const int minWidth      = fm.boundingRect(min).width();
+    const int maxWidth      = fm.boundingRect(max).width();
     const int width         = qMax(pluralWidth, singularWidth) + qMax(minWidth, maxWidth) + cursorWidth;
 
     // Based on QAbstractSpinBox::initStyleOption() from Qt
@@ -1905,7 +1898,7 @@ void ColorSchemeViewDelegate::paint(QPainter *painter, const QStyleOptionViewIte
     // Determine width of sample text using profile's font
     const QString sampleText = i18n("AaZz09...");
     QFontMetrics profileFontMetrics(profileFont);
-    const int sampleTextWidth = profileFontMetrics.width(sampleText);
+    const int sampleTextWidth = profileFontMetrics.boundingRect(sampleText).width();
 
     painter->drawText(option.rect.adjusted(sampleTextWidth + 15, 0, 0, 0),
                       Qt::AlignLeft | Qt::AlignVCenter,

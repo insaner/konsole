@@ -1,7 +1,7 @@
 /*
  *  This file is part of Konsole, a terminal emulator for KDE.
  *
- *  Copyright 2012  Frederik Gladhorn <gladhorn@kde.org>
+ *  Copyright 2019  Tomaz Canabrava <tcanabrava@kde.org>
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -28,11 +28,7 @@
 #include <KLocalizedString>
 #include <QBoxLayout>
 #include <QToolButton>
-#include <QMenu>
 #include <QLabel>
-#include <QAction>
-#include <KToolBarLabelAction>
-#include <QDebug>
 #include <QApplication>
 #include <QPaintEvent>
 #include <QTabBar>
@@ -69,7 +65,7 @@ TerminalHeaderBar::TerminalHeaderBar(QWidget *parent)
 
     m_boxLayout = new QBoxLayout(QBoxLayout::LeftToRight);
     m_boxLayout->setSpacing(0);
-    m_boxLayout->setMargin(0);
+    m_boxLayout->setContentsMargins(0, 0, 0, 0);
 
     // Layout Setup
     m_boxLayout->addStretch();
@@ -133,7 +129,7 @@ void TerminalHeaderBar::paintEvent(QPaintEvent *paintEvent)
     if (!m_terminalIsFocused) {
         auto p = qApp->palette();
         auto shadowColor = p.color(QPalette::ColorRole::Shadow);
-        shadowColor.setAlphaF( 0.2f * shadowColor.alphaF() ); // same as breeze.
+        shadowColor.setAlphaF( qreal(0.2) * shadowColor.alphaF() ); // same as breeze.
 
         QPainter painter(this);
         painter.setPen(Qt::NoPen);
@@ -155,7 +151,7 @@ void TerminalHeaderBar::mouseMoveEvent(QMouseEvent* ev)
         payload.setNum(qApp->applicationPid());
         mimeData->setData(QStringLiteral("konsole/terminal_display"), payload);
         drag->setMimeData(mimeData);
-        drag->start();
+        drag->exec();
     }
 }
 

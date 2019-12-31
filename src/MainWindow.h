@@ -36,14 +36,12 @@ class KActionMenu;
 class KToggleAction;
 
 namespace Konsole {
-class IncrementalSearchBar;
 class ViewManager;
 class ViewProperties;
 class Session;
 class SessionController;
 class ProfileList;
 class BookmarkHandler;
-class TabbedViewContainer;
 
 /**
  * The main window.  This contains the menus and an area which contains the terminal displays.
@@ -128,18 +126,18 @@ Q_SIGNALS:
 
 protected:
     // Reimplemented for internal reasons.
-    void showEvent(QShowEvent *event) Q_DECL_OVERRIDE;
-    bool eventFilter(QObject *obj, QEvent *event) Q_DECL_OVERRIDE;
+    void showEvent(QShowEvent *event) override;
+    bool eventFilter(QObject *obj, QEvent *event) override;
 
     // reimplemented from KMainWindow
-    bool queryClose() Q_DECL_OVERRIDE;
-    void saveProperties(KConfigGroup &group) Q_DECL_OVERRIDE;
-    void readProperties(const KConfigGroup &group) Q_DECL_OVERRIDE;
-    void saveGlobalProperties(KConfig *config) Q_DECL_OVERRIDE;
-    void readGlobalProperties(KConfig *config) Q_DECL_OVERRIDE;
+    bool queryClose() override;
+    void saveProperties(KConfigGroup &group) override;
+    void readProperties(const KConfigGroup &group) override;
+    void saveGlobalProperties(KConfig *config) override;
+    void readGlobalProperties(KConfig *config) override;
 
     // reimplemented from QWidget
-    bool focusNextPrevChild(bool next) Q_DECL_OVERRIDE;
+    bool focusNextPrevChild(bool next) override;
 
 private Q_SLOTS:
     void newTab();

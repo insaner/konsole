@@ -21,16 +21,13 @@
 
 // Own
 #include "ViewContainer.h"
-#include <config-konsole.h>
+#include "config-konsole.h"
 
 // Qt
 #include <QTabBar>
 #include <QMenu>
 #include <QFile>
-#include <QMouseEvent>
-#include <QDragEnterEvent>
-#include <QDropEvent>
-#include <QDrag>
+#include <QKeyEvent>
 
 // KDE
 #include <KColorScheme>
@@ -166,7 +163,8 @@ void TabbedViewContainer::moveTabToWindow(int index, QWidget *window)
 
     QHash<TerminalDisplay*, Session*> sessionsMap = _connectedViewManager->forgetAll(splitter);
 
-    foreach(TerminalDisplay* terminal, splitter->findChildren<TerminalDisplay*>()) {
+    const QList<TerminalDisplay *> displays = splitter->findChildren<TerminalDisplay*>();
+    for (TerminalDisplay *terminal : displays) {
         manager->attachView(terminal, sessionsMap[terminal]);
     }
     auto container = manager->activeContainer();
@@ -268,9 +266,14 @@ void TabbedViewContainer::moveActiveView(MoveDirection direction)
 }
 
 void TabbedViewContainer::terminalDisplayDropped(TerminalDisplay *terminalDisplay) {
-    Session* terminalSession = terminalDisplay->sessionController()->session();
-    terminalDisplay->sessionController()->deleteLater();
-    connectedViewManager()->attachView(terminalDisplay, terminalSession);
+    if (terminalDisplay->sessionController()->parent() != connectedViewManager()) {
+        // Terminal from another window - recreate SessionController for current ViewManager
+        disconnectTerminalDisplay(terminalDisplay);
+        Session* terminalSession = terminalDisplay->sessionController()->session();
+        terminalDisplay->sessionController()->deleteLater();
+        connectedViewManager()->attachView(terminalDisplay, terminalSession);
+        connectTerminalDisplay(terminalDisplay);
+    }
 }
 
 QSize TabbedViewContainer::sizeHint() const
@@ -305,8 +308,8 @@ QSize TabbedViewContainer::sizeHint() const
     //
     // L/R = left/right widget
 
-    return QSize(qMax(terminalSize.width(), tabBarSize.width()),
-                 tabBarSize.height() + terminalSize.height());
+    return {qMax(terminalSize.width(), tabBarSize.width()),
+                 tabBarSize.height() + terminalSize.height()};
 }
 
 void TabbedViewContainer::addSplitter(ViewSplitter *viewSplitter, int index) {
@@ -320,8 +323,8 @@ void TabbedViewContainer::addSplitter(ViewSplitter *viewSplitter, int index) {
     disconnect(viewSplitter, &ViewSplitter::terminalDisplayDropped, nullptr, nullptr);
     connect(viewSplitter, &ViewSplitter::terminalDisplayDropped, this, &TabbedViewContainer::terminalDisplayDropped);
 
-    auto terminalDisplays = viewSplitter->findChildren<TerminalDisplay*>();
-    foreach(TerminalDisplay* terminal, terminalDisplays) {
+    const auto terminalDisplays = viewSplitter->findChildren<TerminalDisplay*>();
+    for (TerminalDisplay *terminal : terminalDisplays) {
         connectTerminalDisplay(terminal);
     }
     if (terminalDisplays.count() > 0) {
@@ -546,7 +549,9 @@ void TabbedViewContainer::setTabActivity(int index, bool activity)
 void TabbedViewContainer::updateActivity(ViewProperties *item)
 {
     auto controller = qobject_cast<SessionController*>(item);
-    auto index = indexOf(controller->view());
+    auto topLevelSplitter = qobject_cast<ViewSplitter*>(controller->view()->parentWidget())->getToplevelSplitter();
+
+    const int index = indexOf(topLevelSplitter);
     if (index != currentIndex()) {
         setTabActivity(index, true);
     }

@@ -23,13 +23,11 @@
 #define VIEWSPLITTER_H
 
 // Qt
-#include <QList>
 #include <QSplitter>
 
 // Konsole
 #include "konsoleprivate_export.h"
 
-class QFocusEvent;
 class QDragMoveEvent;
 class QDragEnterEvent;
 class QDropEvent;
@@ -87,8 +85,8 @@ public:
      * which currently has the focus.
      *
      * To find the currently active container, use
-     * mySplitter->activeSplitter()->activeContainer() where mySplitter
-     * is the ViewSplitter widget at the top of the hierarchy.
+     * mySplitter->activeSplitter()->activeTerminalDisplay() where
+     * mySplitter is the ViewSplitter widget at the top of the hierarchy.
      */
     TerminalDisplay *activeTerminalDisplay() const;
 

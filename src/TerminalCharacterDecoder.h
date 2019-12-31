@@ -82,21 +82,11 @@ public:
      */
     void setLeadingWhitespace(bool enable);
     /**
-     * Returns whether leading whitespace at the end of lines is included
-     * in the output.
-     */
-    bool leadingWhitespace() const;
-    /**
      * Set whether trailing whitespace at the end of lines should be included
      * in the output.
      * Defaults to true.
      */
     void setTrailingWhitespace(bool enable);
-    /**
-     * Returns whether trailing whitespace at the end of lines is included
-     * in the output.
-     */
-    bool trailingWhitespace() const;
     /**
      * Returns of character positions in the output stream
      * at which new lines where added.  Returns an empty if setTrackLinePositions() is false or if
@@ -106,11 +96,11 @@ public:
     /** Enables recording of character positions at which new lines are added.  See linePositions() */
     void setRecordLinePositions(bool record);
 
-    void begin(QTextStream *output) Q_DECL_OVERRIDE;
-    void end() Q_DECL_OVERRIDE;
+    void begin(QTextStream *output) override;
+    void end() override;
 
     void decodeLine(const Character * const characters, int count,
-                    LineProperty properties) Q_DECL_OVERRIDE;
+                    LineProperty properties) override;
 
 private:
     QTextStream *_output;
@@ -133,10 +123,10 @@ public:
     explicit HTMLDecoder(const Profile::Ptr &profile = Profile::Ptr());
 
     void decodeLine(const Character * const characters, int count,
-                    LineProperty properties) Q_DECL_OVERRIDE;
+                    LineProperty properties) override;
 
-    void begin(QTextStream *output) Q_DECL_OVERRIDE;
-    void end() Q_DECL_OVERRIDE;
+    void begin(QTextStream *output) override;
+    void end() override;
 
 private:
     void openSpan(QString &text, const QString &style);

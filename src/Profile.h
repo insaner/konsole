@@ -62,8 +62,8 @@ class KONSOLEPRIVATE_EXPORT Profile : public QSharedData
     friend class ProfileGroup;
 
 public:
-    typedef QExplicitlySharedDataPointer<Profile> Ptr;
-    typedef QExplicitlySharedDataPointer<ProfileGroup> GroupPtr;
+    using Ptr = QExplicitlySharedDataPointer<Profile>;
+    using GroupPtr = QExplicitlySharedDataPointer<ProfileGroup>;
 
     /**
      * This enum describes the available properties
@@ -284,7 +284,7 @@ public:
          * Tracking events but don't indicate they're interested in those
          * events; for example, when vim doesn't indicate it's interested
          * in Mouse Tracking events (i.e. when the mouse is in Normal
-         * (not Visual) mode): http://vimdoc.sourceforge.net/htmldoc/intro.html#Normal
+         * (not Visual) mode): https://vimhelp.org/intro.txt.html#vim-modes-intro
          * mouse wheel scroll events will send up/down key press events.
          *
          * Default value is true.
@@ -707,7 +707,7 @@ inline QVariant Profile::property(Property p) const
 class KONSOLEPRIVATE_EXPORT ProfileGroup : public Profile
 {
 public:
-    typedef QExplicitlySharedDataPointer<ProfileGroup> Ptr;
+    using Ptr = QExplicitlySharedDataPointer<ProfileGroup>;
 
     /** Construct a new profile group, which is hidden by default. */
     explicit ProfileGroup(const Profile::Ptr &profileParent = Profile::Ptr());
@@ -751,7 +751,7 @@ public:
     /** Sets the value of @p property in each of the group's profiles to
      * @p value.
      */
-    void setProperty(Property p, const QVariant &value) Q_DECL_OVERRIDE;
+    void setProperty(Property p, const QVariant &value) override;
 
 private:
     Q_DISABLE_COPY(ProfileGroup)

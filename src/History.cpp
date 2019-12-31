@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <cstdio>
 #include <sys/types.h>
+#include <unistd.h>
 
 // KDE
 #include <QDir>
@@ -110,13 +111,20 @@ HistoryFile::HistoryFile() :
     const QString tmpFormat = tmpDir + QLatin1Char('/') + QLatin1String("konsole-XXXXXX.history");
     _tmpFile.setFileTemplate(tmpFormat);
     if (_tmpFile.open()) {
-        _tmpFile.setAutoRemove(true);
+#if defined(Q_OS_LINUX)
+        qCDebug(KonsoleDebug, "HistoryFile: /proc/%lld/fd/%d", qApp->applicationPid(), _tmpFile.handle());
+#endif
+        // On some systems QTemporaryFile creates unnamed file.
+        // Do not interfere in such cases.
+        if (_tmpFile.exists()) {
+            // Remove file entry from filesystem. Since the file
+            // is opened, it will still be available for reading
+            // and writing. This guarantees the file won't remain
+            // in filesystem after process termination, even when
+            // there was a crash.
+            unlink(QFile::encodeName(_tmpFile.fileName()).constData());
+        }
     }
-    // Force Qt to use named files so I don't waste hours trying to find
-    // these files again.  Perhaps investigate if there are any downsides
-    // to doing this.
-    // https://bugreports.qt.io/browse/QTBUG-66577
-    Q_UNUSED(_tmpFile.fileName());
 }
 
 HistoryFile::~HistoryFile()
@@ -252,8 +260,8 @@ bool HistoryScroll::hasScroll()
    at 0 in cells.
 */
 
-HistoryScrollFile::HistoryScrollFile(const QString &logFileName) :
-    HistoryScroll(new HistoryTypeFile(logFileName))
+HistoryScrollFile::HistoryScrollFile() :
+    HistoryScroll(new HistoryTypeFile())
 {
 }
 
@@ -544,7 +552,7 @@ void CompactHistoryScroll::addCellsVector(const TextLine &cells)
 void CompactHistoryScroll::addCells(const Character a[], int count)
 {
     TextLine newLine(count);
-    qCopy(a, a + count, newLine.begin());
+    std::copy(a, a + count, newLine.begin());
     addCellsVector(newLine);
 }
 
@@ -629,10 +637,7 @@ int HistoryTypeNone::maximumLineCount() const
 
 //////////////////////////////
 
-HistoryTypeFile::HistoryTypeFile(const QString &fileName) :
-    _fileName(fileName)
-{
-}
+HistoryTypeFile::HistoryTypeFile() = default;
 
 bool HistoryTypeFile::isEnabled() const
 {
@@ -644,7 +649,7 @@ HistoryScroll *HistoryTypeFile::scroll(HistoryScroll *old) const
     if (dynamic_cast<HistoryFile *>(old) != nullptr) {
         return old; // Unchanged.
     }
-    HistoryScroll *newScroll = new HistoryScrollFile(_fileName);
+    HistoryScroll *newScroll = new HistoryScrollFile();
 
     Character line[LINE_SIZE];
     int lines = (old != nullptr) ? old->getLines() : 0;

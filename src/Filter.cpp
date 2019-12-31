@@ -27,7 +27,6 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QDir>
-#include <QFile>
 #include <QMimeDatabase>
 #include <QString>
 #include <QTextStream>
@@ -253,16 +252,11 @@ QList<Filter::HotSpot *> Filter::hotSpots() const
     return _hotspotList;
 }
 
-QList<Filter::HotSpot *> Filter::hotSpotsAtLine(int line) const
-{
-    return _hotspots.values(line);
-}
-
 Filter::HotSpot *Filter::hotSpotAt(int line, int column) const
 {
-    QList<HotSpot *> hotspots = _hotspots.values(line);
+    const QList<HotSpot *> hotspots = _hotspots.values(line);
 
-    foreach (HotSpot *spot, hotspots) {
+    for (HotSpot *spot : hotspots) {
         if (spot->startLine() == line && spot->startColumn() > column) {
             continue;
         }
@@ -493,10 +487,14 @@ QList<QAction *> UrlFilter::HotSpot::actions()
 
     if (kind == StandardUrl) {
         openAction->setText(i18n("Open Link"));
+        openAction->setIcon(QIcon::fromTheme(QStringLiteral("internet-services")));
         copyAction->setText(i18n("Copy Link Address"));
+        copyAction->setIcon(QIcon::fromTheme(QStringLiteral("edit-copy-url")));
     } else if (kind == Email) {
         openAction->setText(i18n("Send Email To..."));
+        openAction->setIcon(QIcon::fromTheme(QStringLiteral("mail-send")));
         copyAction->setText(i18n("Copy Email Address"));
+        copyAction->setIcon(QIcon::fromTheme(QStringLiteral("edit-copy-mail")));
     }
 
     // object names are set here so that the hotspot performs the
@@ -521,7 +519,7 @@ QList<QAction *> UrlFilter::HotSpot::actions()
   * File Filter - Construct a filter that works on local file paths using the
   * posix portable filename character set combined with KDE's mimetype filename
   * extension blob patterns.
-  * http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap03.html#tag_03_267
+  * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap03.html#tag_03_267
   */
 
 RegExpFilter::HotSpot *FileFilter::newHotSpot(int startLine, int startColumn, int endLine,

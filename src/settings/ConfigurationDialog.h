@@ -26,7 +26,6 @@
 #define CONFIGURATIONDIALOG_H
 
 // Qt
-#include <QWidget>
 #include <QButtonGroup>
 #include <QAbstractButton>
 #include <QTimer>
@@ -35,13 +34,11 @@
 // KDE
 #include <KPageDialog>
 #include <KCoreConfigSkeleton>
-#include <QDebug>
 
 // Konsole
 #include "konsoleprivate_export.h"
 
-class KConfig;
-class KCoreConfigSkeleton;
+class QWidget;
 class KConfigDialogManager;
 
 namespace Konsole {
@@ -103,14 +100,10 @@ public:
 
     void addChildren(const QObject *parentObj)
     {
-        for (const QObject *child: parentObj->children()) {
-            if (!child->objectName().startsWith(ManagedNamePrefix)) {
-                continue;
-            }
-
-            const char *className = child->metaObject()->className();
-            if (qstrcmp(className, "QButtonGroup") == 0) {
-                add(qobject_cast<const QButtonGroup *>(child));
+        const auto allButtonGroups = parentObj->findChildren<QButtonGroup *>();
+        for (const auto *buttonGroup: allButtonGroups) {
+            if (buttonGroup->objectName().startsWith(ManagedNamePrefix)) {
+                add(buttonGroup);
             }
         }
     }
@@ -126,9 +119,9 @@ public:
     bool hasChanged() const {
         for(const QButtonGroup *group: qAsConst(_groups)) {
             int value = buttonToEnumValue(group->checkedButton());
-            const auto enumItem = groupToConfigItemEnum(group);
+            const auto *enumItem = groupToConfigItemEnum(group);
 
-            if(!enumItem->isEqual(value)) {
+            if(enumItem != nullptr && !enumItem->isEqual(value)) {
                 return true;
             }
         }

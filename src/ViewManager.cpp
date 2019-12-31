@@ -20,14 +20,13 @@
 // Own
 #include "ViewManager.h"
 
-#include <config-konsole.h>
+#include "config-konsole.h"
 
 // Qt
 #include <QStringList>
 #include <QTabBar>
 
 // KDE
-#include <KAcceleratorManager>
 #include <KLocalizedString>
 #include <KActionCollection>
 #include <KConfigGroup>
@@ -262,7 +261,7 @@ void ViewManager::setupActions()
 
 void ViewManager::toggleActionsBasedOnState() {
     const int count = _viewContainer->count();
-    foreach(QAction *tabOnlyAction, _multiTabOnlyActions) {
+    for (QAction *tabOnlyAction : qAsConst(_multiTabOnlyActions)) {
         tabOnlyAction->setEnabled(count > 1);
     }
 
@@ -273,7 +272,7 @@ void ViewManager::toggleActionsBasedOnState() {
                 ->findChildren<TerminalDisplay*>()
                     .count();
 
-        foreach (QAction *action, _multiSplitterOnlyActions) {
+        for (QAction *action : qAsConst(_multiSplitterOnlyActions)) {
             action->setEnabled(splitCount > 1);
         }
     }
@@ -423,7 +422,8 @@ void ViewManager::detachTab(int tabIdx)
 QHash<TerminalDisplay*, Session*> ViewManager::forgetAll(ViewSplitter* splitter) {
     splitter->setParent(nullptr);
     QHash<TerminalDisplay*, Session*> detachedSessions;
-    foreach(TerminalDisplay* terminal, splitter->findChildren<TerminalDisplay*>()) {
+    const QList<TerminalDisplay *> displays = splitter->findChildren<TerminalDisplay*>();
+    for (TerminalDisplay *terminal : displays) {
         Session* session = forgetTerminal(terminal);
         detachedSessions[terminal] = session;
     }
@@ -441,6 +441,17 @@ Session* ViewManager::forgetTerminal(TerminalDisplay* terminal)
     }
     _viewContainer->disconnectTerminalDisplay(terminal);
     updateTerminalDisplayHistory(terminal, true);
+    return session;
+}
+
+Session* ViewManager::createSession(const Profile::Ptr &profile, const QString &directory)
+{
+    Session *session = SessionManager::instance()->createSession(profile);
+    Q_ASSERT(session);
+    if (!directory.isEmpty()) {
+        session->setInitialWorkingDirectory(directory);
+    }
+    session->addEnvironmentEntry(QStringLiteral("KONSOLE_DBUS_WINDOW=/Windows/%1").arg(managerId()));
     return session;
 }
 
@@ -535,15 +546,19 @@ void ViewManager::splitTopBottom()
 
 void ViewManager::splitView(Qt::Orientation orientation)
 {
-    auto viewSplitter = qobject_cast<ViewSplitter*>(_viewContainer->currentWidget());
+    int currentSessionId = currentSession();
+    // At least one display/session exists if we are splitting
+    Q_ASSERT(currentSessionId >= 0);
 
-    // get the currently applied profile and use it to create the new tab.
-    auto *currentDisplay = viewSplitter->findChild<TerminalDisplay*>();
-    auto profile = SessionManager::instance()->sessionProfile(_sessionMap[currentDisplay]);
+    Session *activeSession = SessionManager::instance()->idToSession(currentSessionId);
+    Q_ASSERT(activeSession);
 
-    // Create a new session with the selected profile.
-    auto *session = SessionManager::instance()->createSession(profile);
-    session->addEnvironmentEntry(QStringLiteral("KONSOLE_DBUS_WINDOW=/Windows/%1").arg(managerId()));
+    auto profile = SessionManager::instance()->sessionProfile(activeSession);
+
+    const QString directory = profile->startInCurrentSessionDir()
+                              ? activeSession->currentWorkingDirectory()
+                              : QString();
+    auto *session = createSession(profile, directory);
 
     auto terminalDisplay = createView(session);
 
@@ -604,6 +619,7 @@ void ViewManager::controllerChanged(SessionController *controller)
         return;
     }
 
+    _viewContainer->setFocusProxy(controller->view());
     updateTerminalDisplayHistory(controller->view());
 
     _pluggedController = controller;
@@ -774,9 +790,10 @@ void ViewManager::viewDestroyed(QWidget *view)
 TerminalDisplay *ViewManager::createTerminalDisplay(Session *session)
 {
     auto display = new TerminalDisplay(nullptr);
-    display->setRandomSeed(session->sessionId() * 31);
+    display->setRandomSeed(session->sessionId() | (qApp->applicationPid() << 10));
     connect(display, &TerminalDisplay::requestToggleExpansion,
             _viewContainer, &TabbedViewContainer::toggleMaximizeCurrentTerminal);
+
     return display;
 }
 
@@ -810,7 +827,7 @@ void ViewManager::updateViewsForSession(Session *session)
     const Profile::Ptr profile = SessionManager::instance()->sessionProfile(session);
 
     const QList<TerminalDisplay *> sessionMapKeys = _sessionMap.keys(session);
-    foreach (TerminalDisplay *view, sessionMapKeys) {
+    for (TerminalDisplay *view : sessionMapKeys) {
         applyProfileToView(view, profile);
     }
 }
@@ -902,14 +919,14 @@ namespace {
 
 ViewSplitter *restoreSessionsSplitterRecurse(const QJsonObject& jsonSplitter, ViewManager *manager)
 {
-    auto splitterWidgets = jsonSplitter[QStringLiteral("Widgets")].toArray();
+    const QJsonArray splitterWidgets = jsonSplitter[QStringLiteral("Widgets")].toArray();
     auto orientation = (jsonSplitter[QStringLiteral("Orientation")].toString() == QStringLiteral("Horizontal"))
         ? Qt::Horizontal : Qt::Vertical;
 
     auto *currentSplitter = new ViewSplitter();
     currentSplitter->setOrientation(orientation);
 
-    for (const auto& widgetJsonValue : splitterWidgets) {
+    for (const auto widgetJsonValue : splitterWidgets) {
         const auto widgetJsonObject = widgetJsonValue.toObject();
         const auto sessionIterator = widgetJsonObject.constFind(QStringLiteral("SessionRestoreId"));
 
@@ -935,10 +952,44 @@ void ViewManager::restoreSessions(const KConfigGroup &group)
         _viewContainer->addSplitter(topLevelSplitter, _viewContainer->count());
     }
 
-    if (jsonTabs.isEmpty()) { // Session file is unusable, start default Profile
+    if (!jsonTabs.isEmpty())
+        return;
+
+    // Session file is unusable, try older format
+    QList<int> ids = group.readEntry("Sessions", QList<int>());
+    int activeTab = group.readEntry("Active", 0);
+    TerminalDisplay *display = nullptr;
+
+    int tab = 1;
+    for (auto it = ids.cbegin(); it != ids.cend(); ++it) {
+        const int &id = *it;
+        Session *session = SessionManager::instance()->idToSession(id);
+
+        if (session == nullptr) {
+            qWarning() << "Unable to load session with id" << id;
+            // Force a creation of a default session below
+            ids.clear();
+            break;
+        }
+
+        activeContainer()->addView(createView(session));
+        if (!session->isRunning()) {
+            session->run();
+        }
+        if (tab++ == activeTab) {
+            display = qobject_cast<TerminalDisplay *>(activeView());
+        }
+    }
+
+    if (display != nullptr) {
+        activeContainer()->setCurrentWidget(display);
+        display->setFocus(Qt::OtherFocusReason);
+    }
+
+    if (ids.isEmpty()) { // Session file is unusable, start default Profile
         Profile::Ptr profile = ProfileManager::instance()->defaultProfile();
         Session *session = SessionManager::instance()->createSession(profile);
-        createView(session);
+        activeContainer()->addView(createView(session));
         if (!session->isRunning()) {
             session->run();
         }
@@ -969,79 +1020,54 @@ QStringList ViewManager::sessionList()
 
 int ViewManager::currentSession()
 {
-    QHash<TerminalDisplay *, Session *>::const_iterator i;
-    for (i = _sessionMap.constBegin(); i != _sessionMap.constEnd(); ++i) {
-        if (i.key()->isVisible()) {
-            return i.value()->sessionId();
-        }
+    if (_pluggedController) {
+        Q_ASSERT(_pluggedController->session() != nullptr);
+        return _pluggedController->session()->sessionId();
     }
     return -1;
 }
 
 void ViewManager::setCurrentSession(int sessionId)
 {
-    QHash<TerminalDisplay *, Session *>::const_iterator i;
-    for (i = _sessionMap.constBegin(); i != _sessionMap.constEnd(); ++i) {
-        if (i.value()->sessionId() == sessionId) {
-            i.key()->setFocus(Qt::OtherFocusReason);
-            return;
-        }
+    auto *session = SessionManager::instance()->idToSession(sessionId);
+    if (session == nullptr || session->views().count() == 0) {
+        return;
+    }
+
+    auto *display = session->views().at(0);
+    if (display != nullptr) {
+        display->setFocus(Qt::OtherFocusReason);
     }
 }
 
 int ViewManager::newSession()
 {
-    Profile::Ptr profile = ProfileManager::instance()->defaultProfile();
-    Session *session = SessionManager::instance()->createSession(profile);
-
-    session->addEnvironmentEntry(QStringLiteral("KONSOLE_DBUS_WINDOW=/Windows/%1").arg(managerId()));
-
-    createView(session);
-    session->run();
-
-    return session->sessionId();
+    return newSession(QString(), QString());
 }
 
 int ViewManager::newSession(const QString &profile)
 {
-    const QList<Profile::Ptr> profilelist = ProfileManager::instance()->allProfiles();
-    Profile::Ptr profileptr = ProfileManager::instance()->defaultProfile();
-
-    for (const auto &i : profilelist) {
-        if (i->name() == profile) {
-            profileptr = i;
-            break;
-        }
-    }
-
-    Session *session = SessionManager::instance()->createSession(profileptr);
-
-    session->addEnvironmentEntry(QStringLiteral("KONSOLE_DBUS_WINDOW=/Windows/%1").arg(managerId()));
-
-    createView(session);
-    session->run();
-
-    return session->sessionId();
+    return newSession(profile, QString());
 }
 
 int ViewManager::newSession(const QString &profile, const QString &directory)
 {
-    const QList<Profile::Ptr> profilelist = ProfileManager::instance()->allProfiles();
     Profile::Ptr profileptr = ProfileManager::instance()->defaultProfile();
+    if(!profile.isEmpty()) {
+        const QList<Profile::Ptr> profilelist = ProfileManager::instance()->allProfiles();
 
-    for (const auto &i : profilelist) {
-        if (i->name() == profile) {
-            profileptr = i;
-            break;
+        for (const auto &i : profilelist) {
+            if (i->name() == profile) {
+                profileptr = i;
+                break;
+            }
         }
     }
 
-    Session *session = SessionManager::instance()->createSession(profileptr);
-    session->setInitialWorkingDirectory(directory);
+    Session *session = createSession(profileptr, directory);
 
-    session->addEnvironmentEntry(QStringLiteral("KONSOLE_DBUS_WINDOW=/Windows/%1").arg(managerId()));
-
-    createView(session);
+    auto newView = createView(session);
+    activeContainer()->addView(newView);
     session->run();
 
     return session->sessionId();

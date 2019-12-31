@@ -44,6 +44,7 @@
 #include <KShell>
 #include <KProcess>
 #include <KConfigGroup>
+#include <KIO/DesktopExecParser>
 
 // Konsole
 #include <sessionadaptor.h>
@@ -205,15 +206,16 @@ WId Session::windowId() const
     if (_views.count() == 0) {
         return 0;
     } else {
-        QWidget* window = _views.first();
-
-        Q_ASSERT(window);
-
-        while (window->parentWidget() != nullptr) {
-            window = window->parentWidget();
-        }
-
-        return window->winId();
+        /**
+         * compute the windows id to use
+         * doesn't call winId on some widget, as this might lead
+         * to rendering artifacts as this will trigger the
+         * creation of a native window, see https://doc.qt.io/qt-5/qwidget.html#winId
+         * instead, use https://doc.qt.io/qt-5/qwidget.html#effectiveWinId
+         */
+        QWidget* widget = _views.first();
+        Q_ASSERT(widget);
+        return widget->effectiveWinId();
     }
 }
 
@@ -381,7 +383,7 @@ QString Session::checkProgram(const QString& program)
         return exec;
     }
 
-    exec = KRun::binaryName(exec, false);
+    exec = KIO::DesktopExecParser::executablePath(exec);
     exec = KShell::tildeExpand(exec);
     const QString pexec = QStandardPaths::findExecutable(exec);
     if (pexec.isEmpty()) {
@@ -621,7 +623,7 @@ void Session::silenceTimerDone()
     }
 
     bool hasFocus = false;
-    foreach(TerminalDisplay *display, _views) {
+    for (const TerminalDisplay *display : qAsConst(_views)) {
         if (display->hasFocus()) {
             hasFocus = true;
             break;
@@ -644,14 +646,14 @@ void Session::updateFlowControlState(bool suspended)
 {
     if (suspended) {
         if (flowControlEnabled()) {
-            foreach(TerminalDisplay * display, _views) {
+            for (TerminalDisplay *display : qAsConst(_views)) {
                 if (display->flowControlWarningEnabled()) {
                     display->outputSuspended(true);
                 }
             }
         }
     } else {
-        foreach(TerminalDisplay * display, _views) {
+        for (TerminalDisplay *display : qAsConst(_views)) {
             display->outputSuspended(false);
         }
     }
@@ -693,7 +695,7 @@ void Session::activityStateSet(int state)
     } else if (state == NOTIFYACTIVITY) {
         // Don't notify if the terminal is active
         bool hasFocus = false;
-        foreach(TerminalDisplay *display, _views) {
+        for (const TerminalDisplay *display : qAsConst(_views)) {
             if (display->hasFocus()) {
                 hasFocus = true;
                 break;
@@ -744,7 +746,7 @@ void Session::updateTerminalSize()
     const int VIEW_COLUMNS_THRESHOLD = 2;
 
     //select largest number of lines and columns that will fit in all visible views
-    foreach(TerminalDisplay* view, _views) {
+    for (TerminalDisplay *view : qAsConst(_views)) {
         if (!view->isHidden() &&
                 view->lines() >= VIEW_LINES_THRESHOLD &&
                 view->columns() >= VIEW_COLUMNS_THRESHOLD) {
@@ -1594,11 +1596,15 @@ int Session::historySize() const
     }
 }
 
+QString Session::profile()
+{
+    return SessionManager::instance()->sessionProfile(this)->name();
+}
 
 void Session::setProfile(const QString &profileName)
 {
   const QList<Profile::Ptr> profiles = ProfileManager::instance()->allProfiles();
-  foreach (const Profile::Ptr &profile, profiles) {
+  for (const Profile::Ptr &profile : profiles) {
     if (profile->name() == profileName) {
       SessionManager::instance()->setSessionProfile(this, profile);
     }
@@ -1711,17 +1717,9 @@ SessionGroup::SessionGroup(QObject* parent)
 }
 SessionGroup::~SessionGroup() = default;
 
-int SessionGroup::masterMode() const
-{
-    return _masterMode;
-}
 QList<Session*> SessionGroup::sessions() const
 {
     return _sessions.keys();
-}
-bool SessionGroup::masterStatus(Session* session) const
-{
-    return _sessions[session];
 }
 
 void SessionGroup::addSession(Session* session)
@@ -1745,10 +1743,7 @@ void SessionGroup::setMasterMode(int mode)
 {
     _masterMode = mode;
 }
-QList<Session*> SessionGroup::masters() const
-{
-    return _sessions.keys(true);
-}
+ 
 void SessionGroup::setMasterStatus(Session* session , bool master)
 {
     const bool wasMaster = _sessions[session];
@@ -1779,7 +1774,7 @@ void SessionGroup::forwardData(const QByteArray& data)
 
     _inForwardData = true;
     const QList<Session*> sessionsKeys = _sessions.keys();
-    foreach(Session* other, sessionsKeys) {
+    for (Session *other : sessionsKeys) {
         if (!_sessions[other]) {
             other->emulation()->sendString(data);
         }

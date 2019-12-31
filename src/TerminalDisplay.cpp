@@ -24,7 +24,7 @@
 #include "TerminalDisplay.h"
 
 // Config
-#include <config-konsole.h>
+#include "config-konsole.h"
 
 // Qt
 #include <QApplication>
@@ -34,7 +34,6 @@
 #include <QFileInfo>
 #include <QVBoxLayout>
 #include <QAction>
-#include <QFontDatabase>
 #include <QLabel>
 #include <QMimeData>
 #include <QPainter>
@@ -82,7 +81,7 @@ using namespace Konsole;
     "0123456789./+@"
 
 // we use this to force QPainter to display text in LTR mode
-// more information can be found in: http://unicode.org/reports/tr9/
+// more information can be found in: https://unicode.org/reports/tr9/
 const QChar LTR_OVERRIDE_CHAR(0x202D);
 
 inline int TerminalDisplay::loc(int x, int y) const {
@@ -222,6 +221,13 @@ void TerminalDisplay::fontChange(const QFont&)
     _fontHeight = fm.height() + _lineSpacing;
 
     Q_ASSERT(_fontHeight > 0);
+
+    /* TODO: When changing the three deprecated width() below
+     *       consider the info in
+     *       https://phabricator.kde.org/D23144 comments
+     *       horizontalAdvance() was added in Qt 5.11 (which should be the
+     *       minimum for 20.04 or 20.08 KDE Applications release)
+     */
 
     // waba TerminalDisplay 1.123:
     // "Base character width on widest ASCII character. This prevents too wide
@@ -540,7 +546,7 @@ TerminalDisplay::TerminalDisplay(QWidget* parent)
     _verticalLayout->addWidget(_headerBar);
     _verticalLayout->addStretch();
     _verticalLayout->setSpacing(0);
-    _verticalLayout->setMargin(0);
+    _verticalLayout->setContentsMargins(0, 0, 0, 0);
     setLayout(_verticalLayout);
     new AutoScrollHandler(this);
 #ifndef QT_NO_ACCESSIBILITY
@@ -568,9 +574,8 @@ void TerminalDisplay::hideDragTarget()
     update();
 }
 
-void TerminalDisplay::showDragTarget()
+void TerminalDisplay::showDragTarget(const QPoint& cursorPos)
 {
-    auto cursorPos = mapFromGlobal(QCursor::pos());
     using EdgeDistance = std::pair<int, Qt::Edge>;
     auto closerToEdge = std::min<EdgeDistance>(
         {
@@ -600,6 +605,12 @@ void TerminalDisplay::showDragTarget()
 void TerminalDisplay::drawLineCharString(QPainter& painter, int x, int y, const QString& str,
         const Character* attributes)
 {
+    // only turn on anti-aliasing during this short time for the "text"
+    // for the normal text we have TextAntialiasing on demand on
+    // otherwise we have rendering artifacts
+    // set https://bugreports.qt.io/browse/QTBUG-66036
+    painter.setRenderHint(QPainter::Antialiasing, _antialiasText);
+
     const bool useBoldPen = (attributes->rendition & RE_BOLD) != 0 && _boldIntense;
 
     QRect cellRect = {x, y, _fontWidth, _fontHeight};
@@ -607,15 +618,13 @@ void TerminalDisplay::drawLineCharString(QPainter& painter, int x, int y, const 
         LineBlockCharacters::draw(painter, cellRect.translated(i * _fontWidth, 0), str[i],
                                         useBoldPen);
     }
+
+    painter.setRenderHint(QPainter::Antialiasing, false);
 }
 
 void TerminalDisplay::setKeyboardCursorShape(Enum::CursorShapeEnum shape)
 {
     _cursorShape = shape;
-}
-Enum::CursorShapeEnum TerminalDisplay::keyboardCursorShape() const
-{
-    return _cursorShape;
 }
 
 void TerminalDisplay::setCursorStyle(Enum::CursorShapeEnum shape, bool isBlinking)
@@ -651,10 +660,6 @@ void TerminalDisplay::resetCursorStyle()
 void TerminalDisplay::setKeyboardCursorColor(const QColor& color)
 {
     _cursorColor = color;
-}
-QColor TerminalDisplay::keyboardCursorColor() const
-{
-    return _cursorColor;
 }
 
 void TerminalDisplay::setOpacity(qreal opacity)
@@ -725,10 +730,10 @@ void TerminalDisplay::drawCursor(QPainter& painter,
         // draw the cursor outline, adjusting the area so that
         // it is draw entirely inside 'rect'
         int penWidth = qMax(1, painter.pen().width());
-        painter.drawRect(cursorRect.adjusted(penWidth / 2 + 0.5,
-                                             penWidth / 2 + 0.5,
-                                             - penWidth / 2 - penWidth % 2 + 0.5,
-                                             - penWidth / 2 - penWidth % 2 + 0.5));
+        painter.drawRect(cursorRect.adjusted(int(penWidth / 2) + 0.5,
+                                             int(penWidth / 2) + 0.5,
+                                             - int(penWidth / 2) - penWidth % 2 + 0.5,
+                                             - int(penWidth / 2) - penWidth % 2 + 0.5));
 
         // draw the cursor body only when the widget has focus
         if (hasFocus()) {
@@ -772,10 +777,12 @@ void TerminalDisplay::drawCharacters(QPainter& painter,
         return;
     }
 
+    static constexpr int MaxFontWeight = 99; // https://doc.qt.io/qt-5/qfont.html#Weight-enum
+
     const int normalWeight = font().weight();
     // +26 makes "bold" from "normal", "normal" from "light", etc. It is 26 instead of not 25 to prefer
     // bolder weight when 25 falls in the middle between two weights. See QFont::Weight
-    const int boldWeight = normalWeight + 26;
+    const int boldWeight = qMin(normalWeight + 26, MaxFontWeight);
 
     const auto isBold = [boldWeight](const QFont &font) { return font.weight() >= boldWeight; };
 
@@ -1251,7 +1258,7 @@ void TerminalDisplay::showResizeNotification()
     if (_showTerminalSizeHint && isVisible()) {
         if (_resizeWidget == nullptr) {
             _resizeWidget = new QLabel(i18n("Size: XXX x XXX"), this);
-            _resizeWidget->setMinimumWidth(_resizeWidget->fontMetrics().width(i18n("Size: XXX x XXX")));
+            _resizeWidget->setMinimumWidth(_resizeWidget->fontMetrics().boundingRect(i18n("Size: XXX x XXX")).width());
             _resizeWidget->setMinimumHeight(_resizeWidget->sizeHint().height());
             _resizeWidget->setAlignment(Qt::AlignCenter);
 
@@ -1277,14 +1284,18 @@ void TerminalDisplay::paintEvent(QPaintEvent* pe)
 
     // Determine which characters should be repainted (1 region unit = 1 character)
     QRegion dirtyImageRegion;
-    foreach(const QRect & rect, (pe->region() & contentsRect())) {
+    const QRegion region = pe->region() & contentsRect();
+
+    for (const QRect &rect : region) {
         dirtyImageRegion += widgetToImage(rect);
         drawBackground(paint, rect, getBackgroundColor(), true /* use opacity setting */);
     }
 
-    paint.setRenderHint(QPainter::Antialiasing, _antialiasText);
+    // only turn on text anti-aliasing, never turn on normal antialiasing
+    // set https://bugreports.qt.io/browse/QTBUG-66036
+    paint.setRenderHint(QPainter::TextAntialiasing, _antialiasText);
 
-    foreach(const QRect & rect, dirtyImageRegion) {
+    for (const QRect &rect : qAsConst(dirtyImageRegion)) {
         drawContents(paint, rect);
     }
     drawCurrentResultRect(paint);
@@ -1293,7 +1304,7 @@ void TerminalDisplay::paintEvent(QPaintEvent* pe)
 
     const bool drawDimmed = _dimWhenInactive && !hasFocus();
     const QColor dimColor(0, 0, 0, 128);
-    foreach(const QRect & rect, (pe->region() & contentsRect())) {
+    for (const QRect &rect : region) {
         if (drawDimmed) {
             paint.fillRect(rect, dimColor);
         }
@@ -1374,7 +1385,7 @@ void TerminalDisplay::paintFilters(QPainter& painter)
     // iterate over hotspots identified by the display's currently active filters
     // and draw appropriate visuals to indicate the presence of the hotspot
 
-    QList<Filter::HotSpot*> spots = _filterChain->hotSpots();
+    const QList<Filter::HotSpot*> spots = _filterChain->hotSpots();
     int urlNumber, urlNumInc;
     if (_reverseUrlHints) {
         urlNumber = spots.size() + 1;
@@ -1383,7 +1394,7 @@ void TerminalDisplay::paintFilters(QPainter& painter)
         urlNumber = 0;
         urlNumInc = 1;
     }
-    foreach(Filter::HotSpot* spot, spots) {
+    for (const Filter::HotSpot *spot : spots) {
         urlNumber += urlNumInc;
 
         QRegion region;
@@ -1654,6 +1665,7 @@ void TerminalDisplay::drawContents(QPainter& paint, const QRect& rect)
             }
 
             //Apply text scaling matrix.
+            // TODO: setWorldMatrix is obsolete, change to setWorldTransform
             paint.setWorldMatrix(textScale, true);
 
             //calculate the area in which the text will be drawn
@@ -1688,6 +1700,7 @@ void TerminalDisplay::drawContents(QPainter& paint, const QRect& rect)
             _fixedFont = save__fixedFont;
 
             //reset back to single-width, single-height _lines
+            // TODO: setWorldMatrix is obsolete, change to setWorldTransform
             paint.setWorldMatrix(textScale.inverted(), true);
 
             if (y < _lineProperties.size() - 1) {
@@ -1861,14 +1874,24 @@ void TerminalDisplay::updateCursor()
 
 void TerminalDisplay::resizeEvent(QResizeEvent *event)
 {
-    const auto width = event->size().width() - _scrollBar->geometry().width();
-    const auto headerHeight = _headerBar->isVisible() ? _headerBar->height() : 0;
+    Q_UNUSED(event)
 
-    _searchBar->correctPosition(QSize(width, headerHeight));
     if (contentsRect().isValid()) {
+        // NOTE: This calls setTabText() in TabbedViewContainer::updateTitle(),
+        // which might update the widget size again. New resizeEvent
+        // won't be called, do not rely on new sizes before this call.
         updateImageSize();
         updateImage();
     }
+
+    const auto scrollBarWidth = _scrollbarLocation != Enum::ScrollBarHidden
+                                ? _scrollBar->width()
+                                : 0;
+    const auto headerHeight = _headerBar->isVisible() ? _headerBar->height() : 0;
+
+    const auto x = width() - scrollBarWidth - _searchBar->width();
+    const auto y = headerHeight;
+    _searchBar->move(x, y);
 }
 
 void TerminalDisplay::propagateSize()
@@ -1958,7 +1981,7 @@ void TerminalDisplay::calcGeometry()
         break;
     case Enum::ScrollBarRight:
         _contentRect.setRight(_contentRect.right() - _scrollBar->width());
-        _scrollBar->move(contentsRect().right() - _scrollBar->width() - 1,
+        _scrollBar->move(contentsRect().left() + contentsRect().width() - _scrollBar->width(),
                          contentsRect().top() + headerHeight);
         break;
     }
@@ -3135,55 +3158,71 @@ void TerminalDisplay::doPaste(QString text, bool appendReturn)
         }
     }
 
+    // Most code in Konsole uses UTF-32. We're filtering
+    // UTF-16 here, as all control characters can be represented
+    // in this encoding as single code unit. If you ever need to
+    // filter anything above 0xFFFF (specific code points or
+    // categories which contain such code points), convert text to
+    // UTF-32 using QString::toUcs4() and use QChar static
+    // methods which take "uint ucs4".
+    static const QVector<ushort> whitelist = { u'\t', u'\r', u'\n' };
+    static const auto isUnsafe = [](const QChar &c) {
+        return (c.category() == QChar::Category::Other_Control && !whitelist.contains(c.unicode()));
+    };
+    // Returns control sequence string (e.g. "^C") for control character c
+    static const auto charToSequence = [](const QChar &c) {
+        if (c.unicode() <= 0x1F) {
+            return QStringLiteral("^%1").arg(QChar(u'@' + c.unicode()));
+        } else if (c.unicode() == 0x7F) {
+            return QStringLiteral("^?");
+        } else if (c.unicode() >= 0x80 && c.unicode() <= 0x9F){
+            return QStringLiteral("^[%1").arg(QChar(u'@' + c.unicode() - 0x80));
+        }
+        return QString();
+    };
+
+    const QMap<ushort, QString> characterDescriptions = {
+        {0x0003, i18n("End Of Text/Interrupt: may exit the current process")},
+        {0x0004, i18n("End Of Transmission: may exit the current process")},
+        {0x0007, i18n("Bell: will try to emit an audible warning")},
+        {0x0008, i18n("Backspace")},
+        {0x0013, i18n("Device Control Three/XOFF: suspends output")},
+        {0x001a, i18n("Substitute/Suspend: may suspend current process")},
+        {0x001b, i18n("Escape: used for manipulating terminal state")},
+        {0x001c, i18n("File Separator/Quit: may abort the current process")},
+    };
+
     QStringList unsafeCharacters;
     for (const QChar &c : text) {
-        if (!c.isPrint() && c != QLatin1Char('\t') && c != QLatin1Char('\n')) {
-            QString description;
-            switch(c.unicode()) {
-            case '\x03':
-                description = i18n("^C Interrupt: May abort the current process");
-                break;
-            case '\x04':
-                description = i18n("^D End of transmission: May exit the current process");
-                break;
-            case '\x07':
-                description = i18n("^G Bell: Will try to emit an audible warning");
-                break;
-            case '\x08':
-                description = i18n("^H Backspace");
-                break;
-            case '\x13':
-                description = i18n("^S Scroll lock: Locks terminal output");
-                break;
-            case '\x1a':
-                description = i18n("^Z Suspend: Stops current process");
-                break;
-            case '\x1b':
-                description = i18n("ESC: Used for special commands to the current process");
-                break;
-            default:
-                description = ki18n("Other unprintable character (\\x%1)").subs(c.unicode(), 0, 16).toString();
-                break;
+        if (isUnsafe(c)) {
+            const QString sequence = charToSequence(c);
+            const QString description = characterDescriptions.value(c.unicode(), QString());
+            QString entry = QStringLiteral("U+%1").arg(c.unicode(), 4, 16, QLatin1Char('0'));
+            if(!sequence.isEmpty()) {
+                entry += QStringLiteral("\t%1").arg(sequence);
             }
-            unsafeCharacters.append(description);
+            if(!description.isEmpty()) {
+                entry += QStringLiteral("\t%1").arg(description);
+            }
+            unsafeCharacters.append(entry);
         }
     }
     unsafeCharacters.removeDuplicates();
 
     if (!unsafeCharacters.isEmpty()) {
         int result = KMessageBox::warningYesNoCancelList(window(),
-                i18n("The text you're trying to paste contains hidden unprintable characters, "
+                i18n("The text you're trying to paste contains hidden control characters, "
                     "do you want to filter them out?"),
                 unsafeCharacters,
-                i18nc("@title", "Filter"),
+                i18nc("@title", "Confirm Paste"),
                 KGuiItem(i18nc("@action:button",
-                    "&Remove unprintable"),
+                    "Paste &without control characters"),
                     QStringLiteral("filter-symbolic")),
                 KGuiItem(i18nc("@action:button",
-                    "Confirm &paste"),
+                    "&Paste everything"),
                     QStringLiteral("edit-paste")),
                 KGuiItem(i18nc("@action:button",
-                    "&Cancel paste"),
+                    "&Cancel"),
                     QStringLiteral("dialog-cancel")),
                 QStringLiteral("ShowPasteUnprintableWarning")
             );
@@ -3193,7 +3232,7 @@ void TerminalDisplay::doPaste(QString text, bool appendReturn)
         case KMessageBox::Yes: {
             QString sanitized;
             for (const QChar &c : text) {
-                if (c.isPrint() || c == QLatin1Char('\t') || c == QLatin1Char('\n')) {
+                if (!isUnsafe(c)) {
                     sanitized.append(c);
                 }
             }
@@ -3285,7 +3324,27 @@ void TerminalDisplay::copyToClipboard()
 
 void TerminalDisplay::pasteFromClipboard(bool appendEnter)
 {
-    QString text = QApplication::clipboard()->text(QClipboard::Clipboard);
+    QString text;
+    const QMimeData *mimeData = QApplication::clipboard()->mimeData(QClipboard::Clipboard);
+
+    // When pasting urls of local files:
+    // - remove the scheme part, "file://"
+    // - paste the path(s) as a space-separated list of strings, which are quoted if needed
+    if (!mimeData->hasUrls()) { // fast path if there are no urls
+        text = mimeData->text();
+    } else { // handle local file urls
+        const QList<QUrl> list = mimeData->urls();
+        for (const QUrl &url : list) {
+            if (url.isLocalFile()) {
+                text += KShell::quoteArg(url.toLocalFile());
+                text += QLatin1Char(' ');
+            } else { // can users copy urls of both local and remote files at the same time?
+                text = mimeData->text();
+                break;
+            }
+        }
+    }
+
     doPaste(text, appendEnter);
 }
 

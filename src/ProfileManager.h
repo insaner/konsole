@@ -58,7 +58,7 @@ public:
     /**
      * Destroys the ProfileManager.
      */
-    ~ProfileManager() Q_DECL_OVERRIDE;
+    ~ProfileManager() override;
 
     /**
      * Returns the profile manager instance.
@@ -120,7 +120,7 @@ public:
      * Registers a new type of session.
      * The favorite status of the session ( as returned by isFavorite() ) is set to false by default.
      */
-    void addProfile(const Profile::Ptr &type);
+    void addProfile(const Profile::Ptr &profile);
 
     /**
      * Deletes the configuration file used to store a profile.
@@ -189,27 +189,10 @@ public:
     /**
      * Associates a shortcut with a particular profile.
      */
-    void setShortcut(Profile::Ptr profile, const QKeySequence &shortcut);
+    void setShortcut(Profile::Ptr profile, const QKeySequence &keySequence);
 
     /** Returns the shortcut associated with a particular profile. */
     QKeySequence shortcut(Profile::Ptr profile) const;
-
-    /**
-     * Returns the list of shortcut key sequences which
-     * can be used to create new sessions based on
-     * existing profiles
-     *
-     * When one of the shortcuts is activated,
-     * use findByShortcut() to load the profile associated
-     * with the shortcut.
-     */
-    QList<QKeySequence> shortcuts();
-
-    /**
-     * Finds and loads the profile associated with
-     * the specified @p shortcut key sequence and returns a pointer to it.
-     */
-    Profile::Ptr findByShortcut(const QKeySequence &shortcut);
 
 Q_SIGNALS:
 

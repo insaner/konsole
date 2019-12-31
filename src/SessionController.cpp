@@ -139,7 +139,9 @@ SessionController::SessionController(Session* session , TerminalDisplay* view, Q
     }
 
     actionCollection()->addAssociatedWidget(view);
-    foreach(QAction * action, actionCollection()->actions()) {
+
+    const QList<QAction *> actionsList = actionCollection()->actions();
+    for (QAction *action : actionsList) {
         action->setShortcutContext(Qt::WidgetWithChildrenShortcut);
     }
 
@@ -231,6 +233,9 @@ SessionController::~SessionController()
 
     if (!_editProfileDialog.isNull()) {
         delete _editProfileDialog.data();
+    }
+    if(factory()) {
+        factory()->removeClient(this);
     }
 }
 void SessionController::trackOutput(QKeyEvent* event)
@@ -428,7 +433,7 @@ void SessionController::updateWebSearchMenu()
 
             QAction* action = nullptr;
 
-            foreach(const QString& searchProvider, searchProviders) {
+            for (const QString &searchProvider : searchProviders) {
                 action = new QAction(searchProvider, _webSearchMenu);
                 action->setIcon(QIcon::fromTheme(filterData.iconNameForPreferredSearchProvider(searchProvider)));
                 action->setData(filterData.queryForPreferredSearchProvider(searchProvider));
@@ -825,12 +830,12 @@ EditProfileDialog* SessionController::profileDialogPointer()
 void SessionController::editCurrentProfile()
 {
     // Searching for Edit profile dialog opened with the same profile
-    const QList<SessionController*> allSessionsControllers = _allControllers.values();
-    foreach (SessionController* session, allSessionsControllers) {
-        if ((session->profileDialogPointer() != nullptr)
-                && session->profileDialogPointer()->isVisible()
-                && session->profileDialogPointer()->lookupProfile() == SessionManager::instance()->sessionProfile(_session)) {
-            session->profileDialogPointer()->close();
+    for (SessionController *controller : qAsConst(_allControllers)) {
+        if ( (controller->profileDialogPointer() != nullptr)
+             && controller->profileDialogPointer()->isVisible()
+             && (controller->profileDialogPointer()->lookupProfile()
+                 == SessionManager::instance()->sessionProfile(_session)) ) {
+            controller->profileDialogPointer()->close();
         }
     }
 
@@ -885,6 +890,7 @@ void SessionController::renameSession()
     }
 }
 
+// This is called upon Menu->Close Sesssion and right-click on tab->Close Tab
 bool SessionController::confirmClose() const
 {
     if (_session->isForegroundProcessActive()) {
@@ -907,7 +913,12 @@ bool SessionController::confirmClose() const
                             "  Are you sure you want to close it?", title);
         }
 
-        int result = KMessageBox::warningYesNo(_view->window(), question, i18n("Confirm Close"));
+        int result = KMessageBox::warningYesNo(_view->window(),
+                                               question,
+                                               i18n("Confirm Close"),
+                                               KStandardGuiItem::yes(),
+                                               KStandardGuiItem::no(),
+                                               QStringLiteral("CloseSingleTab"));
         return result == KMessageBox::Yes;
     }
     return true;
@@ -1010,7 +1021,8 @@ static const KXmlGuiWindow* findWindow(const QObject* object)
 static bool hasTerminalDisplayInSameWindow(const Session* session, const KXmlGuiWindow* window)
 {
     // Iterate all TerminalDisplays of this Session ...
-    foreach(const TerminalDisplay* terminalDisplay, session->views()) {
+    const QList<TerminalDisplay *> views = session->views();
+    for (const TerminalDisplay *terminalDisplay : views) {
         // ... and check whether a TerminalDisplay has the same
         // window as given in the parameter
         if (window == findWindow(terminalDisplay)) {
@@ -1093,8 +1105,8 @@ void SessionController::copyInputToSelectedTabs()
         QSet<Session*> newGroup = dialog->chosenSessions();
         newGroup.remove(_session);
 
-        QSet<Session*> completeGroup = newGroup | currentGroup;
-        foreach(Session * session, completeGroup) {
+        const QSet<Session *> completeGroup = newGroup | currentGroup;
+        for (Session *session : completeGroup) {
             if (newGroup.contains(session) && !currentGroup.contains(session)) {
                 _copyToGroup->addSession(session);
             } else if (!newGroup.contains(session) && currentGroup.contains(session)) {
@@ -1637,9 +1649,10 @@ void SessionController::sessionReadOnlyChanged() {
     updateReadOnlyActionStates();
 
     // Update all views
-    foreach (TerminalDisplay* view, session()->views()) {
-        if (view != _view.data()) {
-            view->updateReadOnlyState(isReadOnly());
+    const QList<TerminalDisplay *> viewsList = session()->views();
+    for (TerminalDisplay *terminalDisplay : viewsList) {
+        if (terminalDisplay != _view.data()) {
+            terminalDisplay->updateReadOnlyState(isReadOnly());
         }
     }
 }

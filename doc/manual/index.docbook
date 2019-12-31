@@ -984,7 +984,7 @@ When the window title from current session is emtpy, fallback to using
 <sect2 id="help-menu">
 <title>Help Menu</title>
 <para>&konsole; has the some of the common &kde; <guimenu>Help</guimenu>
-menu items, for more information read the section about the <ulink url="help:/fundamentals/ui.html#menus-help">Help Menu</ulink>
+menu items, for more information read the section about the <ulink url="help:/fundamentals/menus.html#menus-help">Help Menu</ulink>
 of the &kde; Fundamentals.
 </para><!-- Only negative to using this is that it shows shortcut F1 for Handbook -->
 </sect2>
@@ -1013,7 +1013,7 @@ These changes can be made permanent by editing the current profile.
 <listitem><para>%D : current directory (long)</para></listitem>
 <listitem><para>%h : local host (short)</para></listitem>
 <listitem><para>%u : user name</para></listitem>
-<listitem><para>%B : user's Bourne prompt sigil ($, or # for superuser)</para></listitem>
+<listitem><para>%B : user's Bourne prompt sigil ($ = normal user, # = superuser)</para></listitem>
 <listitem><para>%w : window title set by shell</para></listitem>
 <listitem><para>%# : session number</para></listitem>
 </itemizedlist>
@@ -1509,7 +1509,7 @@ Space+Ctrl
 <listitem>
 <para>\xHH : where HH are two hex digits</para>
 <tip>
-<para>This can be used to send ASCII control characters, &eg; <quote>\x00</quote> which is the NUL character</para>
+<para>This can be used to send &ASCII; control characters, &eg; <quote>\x00</quote> which is the NUL character</para>
 </tip>
 </listitem>
 </itemizedlist>

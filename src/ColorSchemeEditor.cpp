@@ -25,7 +25,6 @@
 #include <QFileInfo>
 #include <QCompleter>
 #include <QFileSystemModel>
-#include <QUrl>
 #include <QIcon>
 #include <QFileDialog>
 #include <QImageReader>
@@ -42,7 +41,6 @@
 #include "ui_ColorSchemeEditor.h"
 #include "ColorScheme.h"
 #include "CharacterColor.h"
-#include "Shortcut_p.h"
 
 using namespace Konsole;
 
@@ -87,7 +85,7 @@ ColorSchemeEditor::ColorSchemeEditor(QWidget *parent) :
 
     // transparency slider
     QFontMetrics metrics(font());
-    _ui->transparencyPercentLabel->setMinimumWidth(metrics.width(QStringLiteral("100%")));
+    _ui->transparencyPercentLabel->setMinimumWidth(metrics.boundingRect(QStringLiteral("100%")).width());
 
     connect(_ui->transparencySlider, &QSlider::valueChanged, this,
             &Konsole::ColorSchemeEditor::setTransparencyPercentLabel);
@@ -258,7 +256,7 @@ void ColorSchemeEditor::setBlur(bool blur)
 
 void ColorSchemeEditor::setRandomizedBackgroundColor(bool randomized)
 {
-    _colors->setRandomizedBackgroundColor(randomized);
+    _colors->setColorRandomization(randomized);
 }
 
 void ColorSchemeEditor::setup(const ColorScheme *scheme, bool isNewScheme)
@@ -291,7 +289,7 @@ void ColorSchemeEditor::setup(const ColorScheme *scheme, bool isNewScheme)
     _ui->blurCheckBox->setChecked(scheme->blur());
 
     // randomized background color checkbox
-    _ui->randomizedBackgroundCheck->setChecked(scheme->randomizedBackgroundColor());
+    _ui->randomizedBackgroundCheck->setChecked(scheme->isColorRandomizationEnabled());
 
     // wallpaper stuff
     _ui->wallpaperPath->setText(scheme->wallpaper()->path());

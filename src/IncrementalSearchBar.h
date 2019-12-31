@@ -99,10 +99,9 @@ public:
     void focusLineEdit();
 
     void setOptions();
-    void correctPosition(const QSize& parentSize);
 
     // reimplemented
-    void setVisible(bool visible) Q_DECL_OVERRIDE;
+    void setVisible(bool visible) override;
 Q_SIGNALS:
     /** Emitted when the text entered in the search box is altered */
     void searchChanged(const QString &text);
@@ -137,8 +136,8 @@ Q_SIGNALS:
     void unhandledMovementKeyPressed(QKeyEvent *event);
 
 protected:
-    bool eventFilter(QObject *watched, QEvent *event) Q_DECL_OVERRIDE;
-    void keyPressEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
+    bool eventFilter(QObject *watched, QEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
 public Q_SLOTS:
     void clearLineEdit();
 

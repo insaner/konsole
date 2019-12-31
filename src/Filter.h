@@ -149,7 +149,6 @@ public:
     QList<HotSpot *> hotSpots() const;
 
     /** Returns the list of hotspots identified by the filter which occur on a given line */
-    QList<HotSpot *> hotSpotsAtLine(int line) const;
 
     /**
      * TODO: Document me
@@ -193,7 +192,7 @@ public:
     public:
         HotSpot(int startLine, int startColumn, int endLine, int endColumn,
                 const QStringList &capturedTexts);
-        void activate(QObject *object = nullptr) Q_DECL_OVERRIDE;
+        void activate(QObject *object = nullptr) override;
 
         /** Returns the texts found by the filter when matching the filter's regular expression */
         QStringList capturedTexts() const;
@@ -220,7 +219,7 @@ public:
      * If regexp matches the empty string, then process() will return immediately
      * without finding results.
      */
-    void process() Q_DECL_OVERRIDE;
+    void process() override;
 
 protected:
     /**
@@ -249,15 +248,15 @@ public:
     public:
         HotSpot(int startLine, int startColumn, int endLine, int endColumn,
                 const QStringList &capturedTexts);
-        ~HotSpot() Q_DECL_OVERRIDE;
+        ~HotSpot() override;
 
-        QList<QAction *> actions() Q_DECL_OVERRIDE;
+        QList<QAction *> actions() override;
 
         /**
          * Open a web browser at the current URL.  The url itself can be determined using
          * the capturedTexts() method.
          */
-        void activate(QObject *object = nullptr) Q_DECL_OVERRIDE;
+        void activate(QObject *object = nullptr) override;
 
     private:
         enum UrlType {
@@ -273,7 +272,7 @@ public:
     UrlFilter();
 
 protected:
-    RegExpFilter::HotSpot *newHotSpot(int, int, int, int, const QStringList &) Q_DECL_OVERRIDE;
+    RegExpFilter::HotSpot *newHotSpot(int, int, int, int, const QStringList &) override;
 
 private:
     static const QRegularExpression FullUrlRegExp;
@@ -285,7 +284,7 @@ private:
 
 /**
  * A filter which matches files according to POSIX Portable Filename Character Set
- * http://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap03.html#tag_03_267
+ * https://pubs.opengroup.org/onlinepubs/9699919799/basedefs/V1_chap03.html#tag_03_267
  */
 class FileFilter : public RegExpFilter
 {
@@ -298,14 +297,14 @@ public:
     public:
         HotSpot(int startLine, int startColumn, int endLine, int endColumn,
                 const QStringList &capturedTexts, const QString &filePath);
-        ~HotSpot() Q_DECL_OVERRIDE;
+        ~HotSpot() override;
 
-        QList<QAction *> actions() Q_DECL_OVERRIDE;
+        QList<QAction *> actions() override;
 
         /**
          * Opens kate for editing the file.
          */
-        void activate(QObject *object = nullptr) Q_DECL_OVERRIDE;
+        void activate(QObject *object = nullptr) override;
 
     private:
         FilterObject *_fileObject;
@@ -314,10 +313,10 @@ public:
 
     explicit FileFilter(Session *session);
 
-    void process() Q_DECL_OVERRIDE;
+    void process() override;
 
 protected:
-    RegExpFilter::HotSpot *newHotSpot(int, int, int, int, const QStringList &) Q_DECL_OVERRIDE;
+    RegExpFilter::HotSpot *newHotSpot(int, int, int, int, const QStringList &) override;
 
 private:
     QPointer<Session> _session;
@@ -355,7 +354,7 @@ private:
  *
  * The hotSpotAt() method will return the first hotspot which covers a given position.
  *
- * The hotSpots() and hotSpotsAtLine() method return all of the hotspots in the text and on
+ * The hotSpots() method return all of the hotspots in the text and on
  * a given line respectively.
  */
 class FilterChain : protected QList<Filter *>
@@ -384,8 +383,6 @@ public:
     Filter::HotSpot *hotSpotAt(int line, int column) const;
     /** Returns a list of all the hotspots in all the chain's filters */
     QList<Filter::HotSpot *> hotSpots() const;
-    /** Returns a list of all hotspots at the given line in all the chain's filters */
-    QList<Filter::HotSpot> hotSpotsAtLine(int line) const;
 };
 
 /** A filter chain which processes character images from terminal displays */
@@ -393,7 +390,7 @@ class TerminalImageFilterChain : public FilterChain
 {
 public:
     TerminalImageFilterChain();
-    ~TerminalImageFilterChain() Q_DECL_OVERRIDE;
+    ~TerminalImageFilterChain() override;
 
     /**
      * Set the current terminal image to @p image.

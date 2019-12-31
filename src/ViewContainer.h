@@ -24,7 +24,6 @@
 
 // Qt
 #include <QObject>
-#include <QList>
 #include <QTabWidget>
 
 // Konsole
@@ -35,11 +34,8 @@
 class QPoint;
 class QToolButton;
 class QMenu;
-class QDropEvent;
-class QDragEnterEvent;
 
 namespace Konsole {
-class IncrementalSearchBar;
 class ViewProperties;
 class ViewManager;
 class TabbedViewContainer;
@@ -72,7 +68,7 @@ public:
      * subclasses, use object->deleteLater() to delete any widgets or other objects
      * instead of 'delete object'.
      */
-    ~TabbedViewContainer() Q_DECL_OVERRIDE;
+    ~TabbedViewContainer() override;
 
     /** Adds a new view to the container widget */
     void addView(TerminalDisplay *view);
@@ -145,8 +141,8 @@ public:
      */
     ViewSplitter *viewSplitterAt(int index);
 
-    void connectTerminalDisplay(TerminalDisplay *view);
-    void disconnectTerminalDisplay(TerminalDisplay *view);
+    void connectTerminalDisplay(TerminalDisplay *display);
+    void disconnectTerminalDisplay(TerminalDisplay *display);
     void moveTabLeft();
     void moveTabRight();
 
@@ -205,7 +201,7 @@ protected:
     // close tabs and unregister
     void closeTerminalTab(int idx);
 
-    void keyReleaseEvent(QKeyEvent *event) Q_DECL_OVERRIDE;
+    void keyReleaseEvent(QKeyEvent *event) override;
 private Q_SLOTS:
     void viewDestroyed(QObject *view);
     void konsoleConfigChanged();

@@ -35,7 +35,7 @@
 
 // Konsole
 #include "konsoleprivate_export.h"
-#include "config-konsole.h" //krazy:exclude=includes
+#include "config-konsole.h"
 #include "Shortcut_p.h"
 
 class QColor;
@@ -85,7 +85,7 @@ public:
      * variable.
      */
     explicit Session(QObject *parent = nullptr);
-    ~Session() Q_DECL_OVERRIDE;
+    ~Session() override;
 
     /**
      * Connect to an existing terminal.  When a new Session() is constructed it
@@ -349,7 +349,7 @@ public:
     /**
       * Possible values of the @p what parameter for setSessionAttribute().
       * See the "Operating System Commands" section at:
-      * http://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-Operating-System-Commands
+      * https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Operating-System-Commands
       */
     enum SessionAttributes {
         IconNameAndWindowTitle = 0,
@@ -593,6 +593,11 @@ public Q_SLOTS:
      */
     Q_SCRIPTABLE void setProfile(const QString &profileName);
 
+    /**
+     * Returns the current session's profile name
+     */
+    Q_SCRIPTABLE QString profile();
+
 Q_SIGNALS:
 
     /** Emitted when the terminal process starts. */
@@ -835,7 +840,7 @@ public:
     /** Constructs an empty session group. */
     explicit SessionGroup(QObject *parent);
     /** Destroys the session group and removes all connections between master and slave sessions. */
-    ~SessionGroup() Q_DECL_OVERRIDE;
+    ~SessionGroup() override;
 
     /** Adds a session to the group. */
     void addSession(Session *session);
@@ -854,8 +859,6 @@ public:
      * @param master True to make this session a master or false otherwise
      */
     void setMasterStatus(Session *session, bool master);
-    /** Returns the master status of a session.  See setMasterStatus() */
-    bool masterStatus(Session *session) const;
 
     /**
      * This enum describes the options for propagating certain activity or
@@ -876,19 +879,12 @@ public:
      * @param mode A bitwise OR of MasterMode flags.
      */
     void setMasterMode(int mode);
-    /**
-     * Returns a bitwise OR of the active MasterMode flags for this group.
-     * See setMasterMode()
-     */
-    int masterMode() const;
 
 private Q_SLOTS:
     void sessionFinished();
     void forwardData(const QByteArray &data);
 
 private:
-    QList<Session *> masters() const;
-
     // maps sessions to their master status
     QHash<Session *, bool> _sessions;
 

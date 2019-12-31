@@ -20,7 +20,7 @@
 // Own
 #include "Application.h"
 #include "MainWindow.h"
-#include "config-konsole.h" //krazy:exclude=includes
+#include "config-konsole.h"
 #include "KonsoleSettings.h"
 #include "ViewManager.h"
 #include "ViewContainer.h"
@@ -29,8 +29,10 @@
 #include <qplatformdefs.h>
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QProxyStyle>
 #include <QStandardPaths>
 #include <QDir>
+#include <memory>
 
 // KDE
 #include <KAboutData>
@@ -63,11 +65,30 @@ void deleteQApplication()
     }
 }
 
+// This override resolves following problem: since some qt version if
+// XDG_CURRENT_DESKTOP ≠ kde, then pressing and immediately releasing Alt
+// key makes focus get stuck in QMenu.
+// Upstream report: https://bugreports.qt.io/browse/QTBUG-77355
+class MenuStyle : public QProxyStyle {
+public:
+    int styleHint(const StyleHint stylehint,
+                  const QStyleOption *opt,
+                  const QWidget *widget,
+                  QStyleHintReturn *returnData) const override {
+        return (stylehint == QStyle::SH_MenuBar_AltKeyNavigation)
+            ? 0 : QProxyStyle::styleHint(stylehint, opt, widget, returnData);
+    }
+};
+
 // ***
 // Entry point into the Konsole terminal application.
 // ***
 extern "C" int Q_DECL_EXPORT kdemain(int argc, char *argv[])
 {
+    // enable high dpi support
+    QCoreApplication::setAttribute(Qt::AA_UseHighDpiPixmaps, true);
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling, true);
+
     // Check if any of the arguments makes it impossible to re-use an existing process.
     // We need to do this manually and before creating a QApplication, because
     // QApplication takes/removes the Qt specific arguments that are incompatible.
@@ -87,7 +108,9 @@ extern "C" int Q_DECL_EXPORT kdemain(int argc, char *argv[])
     qputenv("QT_NO_GLIB", "1");
 #endif
 
-    auto app = new QApplication(argc, argv);
+    // Allocate QApplication on the heap for the KDBusService workaround
+    auto app = std::unique_ptr<QApplication>(new QApplication(argc, argv));
+    app->setStyle(new MenuStyle());
 
 #if defined(Q_OS_LINUX) && (QT_VERSION < QT_VERSION_CHECK(5, 11, 2))
     if (qtUseGLibOld.isNull()) {
@@ -96,9 +119,6 @@ extern "C" int Q_DECL_EXPORT kdemain(int argc, char *argv[])
         qputenv("QT_NO_GLIB", qtUseGLibOld);
     }
 #endif
-
-    // enable high dpi support
-    app->setAttribute(Qt::AA_UseHighDpiPixmaps, true);
 
 #if defined(Q_OS_MACOS)
     // this ensures that Ctrl and Meta are not swapped, so CTRL-C and friends
@@ -147,6 +167,8 @@ extern "C" int Q_DECL_EXPORT kdemain(int argc, char *argv[])
     if (!Konsole::KonsoleSettings::useSingleInstance()
         && !parser->isSet(QStringLiteral("new-tab"))) {
         startupOption = KDBusService::Multiple;
+    } else if (Konsole::KonsoleSettings::useSingleInstance()) {
+        startupOption = KDBusService::Unique;
     }
 
     atexit(deleteQApplication);
@@ -174,9 +196,8 @@ extern "C" int Q_DECL_EXPORT kdemain(int argc, char *argv[])
             if (!targetDir.exists()) {
                 QDir().mkpath(targetBasePath);
             }
-            QStringList fileNames = sourceDir.entryList(
-                QDir::Files | QDir::NoDotAndDotDot | QDir::NoSymLinks);
-            foreach (const QString &fileName, fileNames) {
+            const QStringList fileNames = sourceDir.entryList(QDir::Files | QDir::NoDotAndDotDot | QDir::NoSymLinks);
+            for (const QString &fileName : fileNames) {
                 targetFilePath = targetBasePath + fileName;
                 if (!QFile::exists(targetFilePath)) {
                     QFile::copy(sourceBasePath + fileName, targetFilePath);
@@ -202,15 +223,11 @@ extern "C" int Q_DECL_EXPORT kdemain(int argc, char *argv[])
         // 2. An invalid situation occurred
         const bool continueStarting = (konsoleApp.newInstance() != 0);
         if (!continueStarting) {
-            delete app;
             return 0;
         }
     }
 
-    // Since we've allocated the QApplication on the heap for the KDBusService workaround,
-    // we need to delete it manually before returning from main().
     int ret = app->exec();
-    delete app;
     return ret;
 }
 
@@ -241,7 +258,7 @@ bool shouldUseNewProcess(int argc, char *argv[])
     qtProblematicOptions << QStringLiteral("--display")
                          << QStringLiteral("--visual");
 #endif
-    foreach (const QString &option, qtProblematicOptions) {
+    for (const QString &option : qAsConst(qtProblematicOptions)) {
         if (arguments.contains(option)) {
             return true;
         }
@@ -255,7 +272,7 @@ bool shouldUseNewProcess(int argc, char *argv[])
     kdeProblematicOptions << QStringLiteral("--waitforwm");
 #endif
 
-    foreach (const QString &option, kdeProblematicOptions) {
+    for (const QString &option : qAsConst(kdeProblematicOptions)) {
         if (arguments.contains(option)) {
             return true;
         }

@@ -1227,15 +1227,6 @@ bool Screen::isSelectionValid() const
     return _selTopLeft >= 0 && _selBottomRight >= 0;
 }
 
-void Screen::writeSelectionToStream(TerminalCharacterDecoder* decoder ,
-                                    const DecodingOptions options) const
-{
-    if (!isSelectionValid()) {
-        return;
-    }
-    writeToStream(decoder, _selTopLeft, _selBottomRight, options);
-}
-
 void Screen::writeToStream(TerminalCharacterDecoder* decoder,
                            int startIndex, int endIndex,
                            const DecodingOptions options) const
@@ -1382,7 +1373,7 @@ int Screen::copyLineToStream(int line ,
     if ((options & TrimLeadingWhitespace) != 0u) {
         int spacesCount = 0;
         for (spacesCount = 0; spacesCount < count; spacesCount++) {
-            if (!QChar(characterBuffer[spacesCount].character).isSpace()) {
+            if (QChar::category(characterBuffer[spacesCount].character) != QChar::Category::Separator_Space) {
                 break;
             }
         }

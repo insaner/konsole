@@ -65,11 +65,11 @@ struct CharCodes {
 
 /**
  * Provides an xterm compatible terminal emulation based on the DEC VT102 terminal.
- * A full description of this terminal can be found at http://vt100.net/docs/vt102-ug/
+ * A full description of this terminal can be found at https://vt100.net/docs/vt102-ug/
  *
  * In addition, various additional xterm escape sequences are supported to provide
  * features such as mouse input handling.
- * See http://rtfm.etla.org/xterm/ctlseq.html for a description of xterm's escape
+ * See https://invisible-island.net/xterm/ctlseqs/ctlseqs.html for a description of xterm's escape
  * sequences.
  *
  */
@@ -80,27 +80,27 @@ class Vt102Emulation : public Emulation
 public:
     /** Constructs a new emulation */
     Vt102Emulation();
-    ~Vt102Emulation() Q_DECL_OVERRIDE;
+    ~Vt102Emulation() override;
 
     // reimplemented from Emulation
-    void clearEntireScreen() Q_DECL_OVERRIDE;
-    void reset() Q_DECL_OVERRIDE;
-    char eraseChar() const Q_DECL_OVERRIDE;
+    void clearEntireScreen() override;
+    void reset() override;
+    char eraseChar() const override;
 
 public Q_SLOTS:
     // reimplemented from Emulation
-    void sendString(const QByteArray &string) Q_DECL_OVERRIDE;
-    void sendText(const QString &text) Q_DECL_OVERRIDE;
-    void sendKeyEvent(QKeyEvent *) Q_DECL_OVERRIDE;
-    void sendMouseEvent(int buttons, int column, int line, int eventType) Q_DECL_OVERRIDE;
-    void focusLost() Q_DECL_OVERRIDE;
-    void focusGained() Q_DECL_OVERRIDE;
+    void sendString(const QByteArray &string) override;
+    void sendText(const QString &text) override;
+    void sendKeyEvent(QKeyEvent *) override;
+    void sendMouseEvent(int buttons, int column, int line, int eventType) override;
+    void focusLost() override;
+    void focusGained() override;
 
 protected:
     // reimplemented from Emulation
-    void setMode(int mode) Q_DECL_OVERRIDE;
-    void resetMode(int mode) Q_DECL_OVERRIDE;
-    void receiveChar(uint cc) Q_DECL_OVERRIDE;
+    void setMode(int mode) override;
+    void resetMode(int mode) override;
+    void receiveChar(uint cc) override;
 
 private Q_SLOTS:
     // Causes sessionAttributeChanged() to be emitted for each (int,QString)
@@ -133,8 +133,8 @@ private:
 
     void resetTokenizer();
 #define MAX_TOKEN_LENGTH 256 // Max length of tokens (e.g. window title)
-    void addToCurrentToken(int cc);
-    int tokenBuffer[MAX_TOKEN_LENGTH]; //FIXME: overflow?
+    void addToCurrentToken(uint cc);
+    uint tokenBuffer[MAX_TOKEN_LENGTH]; //FIXME: overflow?
     int tokenBufferPos;
 #define MAXARGS 15
     void addDigit(int dig);
@@ -151,7 +151,7 @@ private:
     void reportDecodingError();
 
     void processToken(int code, int p, int q);
-    void processSessionAttributeRequest();
+    void processSessionAttributeRequest(int tokenSize);
 
     void reportTerminalType();
     void reportSecondaryAttributes();
